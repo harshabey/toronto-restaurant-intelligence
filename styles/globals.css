@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; }
+body { margin: 0; padding: 0; background: #fafaf8; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #f5f0eb; }
+::-webkit-scrollbar-thumb { background: #d6cfc7; border-radius: 99px; }
+select { -moz-appearance: none; }
+button:focus-visible, select:focus-visible { outline: 2px solid #e85d26; outline-offset: 2px; }
