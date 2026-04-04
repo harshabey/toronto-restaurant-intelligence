@@ -5,11 +5,30 @@ import { getNearestTransit } from '../../lib/transit';
 import { getBusyness } from '../../lib/busyness';
 import { hasYelpKey, searchYelp, mapYelpBusiness } from '../../lib/yelp';
 
-// Pre-compute mock data at module load
+// ─── Pre-compute base (curated) venues at module load ─────────────────────────
 const baseRestaurants = enrichAll(restaurants).map(r => ({
   ...r,
   transit: getNearestTransit(r.coordinates),
 }));
+
+// ─── Load Google crawled venues if available ──────────────────────────────────
+// Run scripts/crawl-google-places.js to generate data/restaurants-google.js,
+// then commit the file. The app picks it up automatically on next deploy.
+let googleRestaurants = [];
+try {
+  // Dynamic require so a missing file is a soft error, not a build failure
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const raw = require('../../data/restaurants-google');
+  const baseNames = new Set(baseRestaurants.map(r => r.name.toLowerCase().trim()));
+  const deduped   = raw.filter(r => !baseNames.has((r.name || '').toLowerCase().trim()));
+  googleRestaurants = enrichAll(deduped).map(r => ({
+    ...r,
+    transit: getNearestTransit(r.coordinates),
+  }));
+  console.log(`[recommend] Loaded ${googleRestaurants.length} Google venues (${raw.length - deduped.length} deduped against curated set)`);
+} catch {
+  // File not yet generated — run scripts/crawl-google-places.js to add real data
+}
 
 const VALID_OCCASIONS = [
   'date', 'first date', 'follow-up date',
@@ -34,7 +53,7 @@ function parseCuisines(raw) {
 function fmtHour(h) {
   if (h == null) return null;
   const wrapped = h >= 24 ? h - 24 : h;
-  const period = wrapped >= 12 ? 'PM' : 'AM';
+  const period  = wrapped >= 12 ? 'PM' : 'AM';
   const display = wrapped === 0 ? 12 : wrapped > 12 ? wrapped - 12 : wrapped;
   return `${display}:00 ${period}`;
 }
@@ -56,6 +75,7 @@ function serialise(r, time) {
     openTime: fmtHour(r.openHour),
     closeTime: fmtHour(r.closeHour),
     isOpenAtTime: isOpenAt(r, time),
+    source: r.source || 'curated',
   };
 }
 
@@ -64,9 +84,9 @@ export default async function handler(req, res) {
   const {
     location = '',
     occasion = '',
-    vibe = '',
-    time = '7:00 PM',
-    day = 'Friday',
+    vibe     = '',
+    time     = '7:00 PM',
+    day      = 'Friday',
     surprise = false,
     cuisines,
   } = raw;
@@ -74,16 +94,16 @@ export default async function handler(req, res) {
   let params = {
     location: location || '',
     occasion: occasion || '',
-    vibe: vibe || '',
-    time: time || '7:00 PM',
-    day: day || 'Friday',
+    vibe:     vibe     || '',
+    time:     time     || '7:00 PM',
+    day:      day      || 'Friday',
     cuisines: parseCuisines(cuisines),
   };
 
   const noOccasion = !params.occasion;
 
   if (surprise === 'true' || surprise === true) {
-    const allN = [...new Set(baseRestaurants.map(r => r.neighbourhood))];
+    const allN = [...new Set([...baseRestaurants, ...googleRestaurants].map(r => r.neighbourhood))];
     const surpriseLocation = Math.random() > 0.4
       ? allN[Math.floor(Math.random() * allN.length)]
       : '';
@@ -94,10 +114,8 @@ export default async function handler(req, res) {
     params = {
       location: surpriseLocation,
       occasion: occasionPool[Math.floor(Math.random() * occasionPool.length)],
-      vibe: VALID_VIBES[Math.floor(Math.random() * VALID_VIBES.length)],
-      time,
-      day,
-      cuisines: [],
+      vibe:     VALID_VIBES[Math.floor(Math.random() * VALID_VIBES.length)],
+      time, day, cuisines: [],
     };
   } else {
     if (params.occasion && !VALID_OCCASIONS.includes(params.occasion)) {
@@ -108,50 +126,58 @@ export default async function handler(req, res) {
     }
   }
 
-  // Merge Yelp data if key is present
-  let allRestaurants = [...baseRestaurants];
+  // ─── Build dataset: curated + crawled + optional live Yelp ────────────────
+  // Start with curated + Google crawled (already merged and deduped at module load)
+  let allRestaurants = [...baseRestaurants, ...googleRestaurants];
+
+  // Optionally layer live Yelp results on top when a neighbourhood is selected
   if (hasYelpKey() && params.location) {
     try {
       const yelpBizs = await searchYelp({ location: params.location, limit: 50 });
       if (yelpBizs && yelpBizs.length > 0) {
-        const existingNames = new Set(baseRestaurants.map(r => r.name.toLowerCase().trim()));
-        const newFromYelp = yelpBizs
+        const existingNames = new Set(allRestaurants.map(r => r.name.toLowerCase().trim()));
+        const newFromYelp   = yelpBizs
           .filter(b => !existingNames.has(b.name.toLowerCase().trim()))
           .map(b => {
             const mapped = mapYelpBusiness(b, params.location);
             return { ...mapped, transit: getNearestTransit(mapped.coordinates) };
           });
-        allRestaurants = [...baseRestaurants, ...newFromYelp];
+        allRestaurants = [...allRestaurants, ...newFromYelp];
       }
     } catch {
-      // Yelp failed — continue with mock data
+      // Yelp failed — continue with existing data
     }
   }
 
-  // Busyness-first mode when no occasion selected
+  const meta_sources = {
+    curated: baseRestaurants.length,
+    google:  googleRestaurants.length,
+    total:   allRestaurants.length,
+  };
+
+  // ─── Busyness-first mode (no occasion selected) ───────────────────────────
   if (noOccasion && !(surprise === 'true' || surprise === true)) {
     const selectedCuisines = params.cuisines;
     const mapped = allRestaurants
       .map(r => {
-        // Cuisine hard-filter when specified
         if (selectedCuisines.length > 0) {
           const rCats = r.cuisineCategories || [];
           if (!selectedCuisines.some(c => rCats.includes(c))) return null;
         }
-        // Location soft-filter: exact match boosted, others included
-        const locationMatch = !params.location || r.neighbourhood.toLowerCase() === params.location.toLowerCase();
+        const locationMatch = !params.location ||
+          r.neighbourhood.toLowerCase() === params.location.toLowerCase();
         const busynessData = getBusyness(r, params.day, params.time);
-        const open = isOpenAt(r, params.time);
+        const open  = isOpenAt(r, params.time);
         const score = open
           ? Math.max(0, Math.round(60 - busynessData.score * 4) + (locationMatch ? 10 : 0))
           : 0;
         return {
           ...r,
-          matchScore: score,
+          matchScore:    score,
           isStrongMatch: open && busynessData.score <= 5,
-          busyness: busynessData,
+          busyness:      busynessData,
           whyRecommended: open
-            ? `Currently ${busynessData.label.toLowerCase()} — ${busynessData.waitEstimate === 'No wait' ? 'no wait expected' : busynessData.waitEstimate + ' wait'}.`
+            ? `Currently ${busynessData.label.toLowerCase()} \u2014 ${busynessData.waitEstimate === 'No wait' ? 'no wait expected' : busynessData.waitEstimate + ' wait'}.`
             : 'Closed at this time.',
         };
       })
@@ -163,38 +189,28 @@ export default async function handler(req, res) {
         return (a.busyness?.score ?? 99) - (b.busyness?.score ?? 99);
       });
 
-    const top = mapped.slice(0, 18);
+    const top             = mapped.slice(0, 18);
     const strongMatchCount = top.filter(r => r.isStrongMatch).length;
 
     return res.status(200).json({
-      results: top.map(r => serialise(r, params.time)),
+      results:          top.map(r => serialise(r, params.time)),
       strongMatchCount,
-      noOccasion: true,
-      query: params,
-      meta: {
-        total: mapped.length,
-        strongMatchCount,
-        suggestionCount: top.length - strongMatchCount,
-        generatedAt: new Date().toISOString(),
-      },
+      noOccasion:       true,
+      query:            params,
+      meta:             { ...meta_sources, strongMatchCount, suggestionCount: top.length - strongMatchCount, generatedAt: new Date().toISOString() },
     });
   }
 
-  // Normal occasion-based ranking
-  const ranked = rankRestaurants(allRestaurants, params);
-  const top = ranked.slice(0, 18);
+  // ─── Normal occasion-based ranking ───────────────────────────────────────
+  const ranked          = rankRestaurants(allRestaurants, params);
+  const top             = ranked.slice(0, 18);
   const strongMatchCount = top.filter(r => r.isStrongMatch).length;
 
   return res.status(200).json({
-    results: top.map(r => serialise(r, params.time)),
+    results:          top.map(r => serialise(r, params.time)),
     strongMatchCount,
-    noOccasion: false,
-    query: params,
-    meta: {
-      total: ranked.length,
-      strongMatchCount,
-      suggestionCount: top.length - strongMatchCount,
-      generatedAt: new Date().toISOString(),
-    },
+    noOccasion:       false,
+    query:            params,
+    meta:             { ...meta_sources, strongMatchCount, suggestionCount: top.length - strongMatchCount, generatedAt: new Date().toISOString() },
   });
 }
