@@ -44,7 +44,7 @@ const CUISINE_OPTIONS = [
   'Bar', 'Wine Bar', 'Gastropub', 'Vegan/Vegetarian',
 ];
 
-const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const DAYS  = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
 const TIMES = [
   '6:00 AM','6:30 AM','7:00 AM','7:30 AM','8:00 AM','8:30 AM',
@@ -58,7 +58,7 @@ const TIMES = [
 
 const PRICE_SYMBOLS = { 1:'$', 2:'$$', 3:'$$$', 4:'$$$$' };
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
+// ─── Sub-components ─────────────────────────────────────────────────────────
 
 function BusynessBar({ busyness }) {
   const cm = {
@@ -123,7 +123,7 @@ function MatchBadge({ score }) {
 
 function VenueTypePill({ r }) {
   if (r.lateNight && r.isBar) return <span style={{ fontSize:11, background:'#1e1b4b', color:'#c7d2fe', padding:'2px 8px', borderRadius:99, fontWeight:600 }}>🌙 Late Night Bar</span>;
-  if (r.isBar) return <span style={{ fontSize:11, background:'#fef3c7', color:'#92400e', padding:'2px 8px', borderRadius:99, fontWeight:600 }}>🍺 Bar</span>;
+  if (r.isBar)  return <span style={{ fontSize:11, background:'#fef3c7', color:'#92400e', padding:'2px 8px', borderRadius:99, fontWeight:600 }}>🍺 Bar</span>;
   if (r.isCafe) return <span style={{ fontSize:11, background:'#f0fdf4', color:'#166534', padding:'2px 8px', borderRadius:99, fontWeight:600 }}>☕ Cafe</span>;
   return null;
 }
@@ -263,10 +263,7 @@ function RestaurantCard({ r, index }) {
 
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
               {r.address && <p style={{ margin:0, fontSize:12, color:'#9ca3af' }}>📍 {r.address}</p>}
-              <a
-                href={redditUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              <a href={redditUrl} target="_blank" rel="noopener noreferrer"
                 style={{ fontSize:12, color:'#e85d26', fontWeight:600, textDecoration:'none', display:'flex', alignItems:'center', gap:4 }}
               >
                 <span style={{ fontSize:14 }}>🗨️</span> Community on Reddit
@@ -323,10 +320,8 @@ function CuisineMultiselect({ selected, onChange }) {
   }, []);
 
   const toggle = c => onChange(selected.includes(c) ? selected.filter(x => x !== c) : [...selected, c]);
-  const label = selected.length === 0
-    ? 'All cuisines'
-    : selected.length === 1
-    ? selected[0]
+  const label  = selected.length === 0 ? 'All cuisines'
+    : selected.length === 1 ? selected[0]
     : `${selected.length} cuisines selected`;
 
   return (
@@ -335,20 +330,15 @@ function CuisineMultiselect({ selected, onChange }) {
         Cuisine <span style={{ fontWeight:400, color:'#b0a99f' }}>(optional)</span>
       </label>
       <div style={{ position:'relative' }}>
-        <button
-          type="button"
-          onClick={() => setOpen(o => !o)}
+        <button type="button" onClick={() => setOpen(o => !o)}
           style={{
             width:'100%', appearance:'none', background:'#fff',
             border:'1.5px solid ' + (open ? '#e85d26' : '#e8e2db'),
             borderRadius:10, padding:'11px 36px 11px 14px',
             fontSize:15, color: selected.length > 0 ? '#1a1a1a' : '#9ca3af',
-            cursor:'pointer', outline:'none', textAlign:'left',
-            transition:'border-color 0.15s ease',
+            cursor:'pointer', outline:'none', textAlign:'left', transition:'border-color 0.15s ease',
           }}
-        >
-          {label}
-        </button>
+        >{label}</button>
         <span style={{ position:'absolute', right:12, top:'50%', transform:`translateY(-50%) rotate(${open?180:0}deg)`, pointerEvents:'none', color:'#9ca3af', fontSize:12, transition:'transform 0.2s' }}>{String.fromCharCode(9660)}</span>
 
         {open && (
@@ -360,7 +350,7 @@ function CuisineMultiselect({ selected, onChange }) {
           }}>
             <div style={{ display:'flex', gap:8, marginBottom:10, paddingBottom:10, borderBottom:'1px solid #f0ede8' }}>
               <button type="button" onClick={() => onChange([...CUISINE_OPTIONS])} style={{ flex:1, fontSize:12, fontWeight:600, padding:'5px 0', background:'#f5f0eb', border:'none', borderRadius:6, cursor:'pointer', color:'#374151' }}>Select All</button>
-              <button type="button" onClick={() => onChange([])} style={{ flex:1, fontSize:12, fontWeight:600, padding:'5px 0', background:'#f5f0eb', border:'none', borderRadius:6, cursor:'pointer', color:'#374151' }}>Clear</button>
+              <button type="button" onClick={() => onChange([])}                   style={{ flex:1, fontSize:12, fontWeight:600, padding:'5px 0', background:'#f5f0eb', border:'none', borderRadius:6, cursor:'pointer', color:'#374151' }}>Clear</button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'2px 12px' }}>
               {CUISINE_OPTIONS.map(c => (
@@ -392,15 +382,20 @@ function YMALSeparator() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Home() {
-  const [form, setForm] = useState({ location:'', occasion:'', vibe:'', day:'Friday', time:'7:00 PM' });
+  const [form,             setForm]             = useState({ location:'', occasion:'', vibe:'', day:'Friday', time:'7:00 PM' });
+  const [intent,           setIntent]           = useState('');
   const [selectedCuisines, setSelectedCuisines] = useState([]);
-  const [results, setResults] = useState(null);
+  const [priceFilter,      setPriceFilter]      = useState(0);   // 0 = all
+  const [openNow,          setOpenNow]          = useState(false);
+  const [results,          setResults]          = useState(null);
   const [strongMatchCount, setStrongMatchCount] = useState(0);
-  const [noOccasion, setNoOccasion] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [effectiveQuery, setEffectiveQuery] = useState(null);
-  const [totalVenues, setTotalVenues] = useState(null);
+  const [noOccasion,       setNoOccasion]       = useState(false);
+  const [intentMode,       setIntentMode]       = useState(false);
+  const [matchedTags,      setMatchedTags]      = useState([]);
+  const [loading,          setLoading]          = useState(false);
+  const [error,            setError]            = useState(null);
+  const [effectiveQuery,   setEffectiveQuery]   = useState(null);
+  const [totalVenues,      setTotalVenues]      = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   async function search(surprise = false) {
@@ -408,20 +403,33 @@ export default function Home() {
     try {
       const body = surprise
         ? { ...form, surprise: true }
-        : { ...form, cuisines: selectedCuisines.join(',') };
-      const res = await fetch('/api/recommend', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        : { ...form, intent, cuisines: selectedCuisines.join(',') };
+      const res  = await fetch('/api/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Something went wrong.'); }
-      else {
+      if (!res.ok) {
+        setError(data.error || 'Something went wrong.');
+      } else {
         setResults(data.results || []);
         setStrongMatchCount(data.strongMatchCount || 0);
         setNoOccasion(data.noOccasion || false);
+        setIntentMode(data.intentMode || false);
+        setMatchedTags(data.matchedTags || []);
         setEffectiveQuery(data.query);
         if (data.meta?.total) setTotalVenues(data.meta.total);
       }
     } catch { setError('Network error \u2014 please try again.'); }
     finally { setLoading(false); }
   }
+
+  // Client-side filters applied on top of server results
+  const displayResults = (results || [])
+    .filter(r => !openNow      || r.isOpenAtTime)
+    .filter(r => priceFilter === 0 || r.priceLevel === priceFilter);
+  const displayStrongCount = displayResults.filter(r => r.isStrongMatch).length;
 
   const hasResults = results !== null;
 
@@ -448,41 +456,99 @@ export default function Home() {
           </div>
         </nav>
 
+        {/* Hero */}
         <div style={{ background:'linear-gradient(160deg,#1a1a1a 0%,#2d1a0e 100%)', padding:'52px 24px 60px', textAlign:'center' }}>
-          <div style={{ maxWidth:600, margin:'0 auto' }}>
+          <div style={{ maxWidth:620, margin:'0 auto' }}>
             <p style={{ margin:'0 0 10px', fontSize:13, fontWeight:600, color:'#e85d26', letterSpacing:'0.1em', textTransform:'uppercase' }}>Toronto &middot; Restaurants, Bars & Cafes</p>
-            <h1 style={{ margin:'0 0 16px', fontSize:'clamp(30px,5vw,46px)', fontWeight:700, color:'#fff', lineHeight:1.15, letterSpacing:'-0.03em', fontFamily:'Georgia, serif' }}>
+            <h1 style={{ margin:'0 0 14px', fontSize:'clamp(30px,5vw,46px)', fontWeight:700, color:'#fff', lineHeight:1.15, letterSpacing:'-0.03em', fontFamily:'Georgia, serif' }}>
               Find your perfect<br />Toronto spot
             </h1>
-            <p style={{ margin:0, fontSize:16, color:'#a8a29e', lineHeight:1.6 }}>
-              Pick a day and time &mdash; we&apos;ll show the highest rated spots. Add an occasion and vibe for personalised picks.
+            <p style={{ margin:0, fontSize:15, color:'#a8a29e', lineHeight:1.6 }}>
+              Describe what you&apos;re looking for &mdash; we&apos;ll match venues to your intent.
             </p>
           </div>
         </div>
 
+        {/* Search card */}
         <div style={{ padding:'0 24px', marginTop:-28 }}>
           <div style={{ maxWidth:760, margin:'0 auto', background:'#fff', borderRadius:20, boxShadow:'0 4px 24px rgba(0,0,0,0.12)', padding:'28px 28px 24px' }}>
 
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:16, marginBottom:16 }}>
-              <SelectField label="Neighbourhood" value={form.location} onChange={v => set('location',v)} options={NEIGHBOURHOODS} placeholder="All Toronto" optional />
-              <SelectField label="Occasion" value={form.occasion} onChange={v => set('occasion',v)} options={OCCASIONS} placeholder="Any occasion" optional />
-              <SelectField label="Vibe" value={form.vibe} onChange={v => set('vibe',v)} options={VIBES} placeholder="Any vibe" optional />
+            {/* Intent input — hero search */}
+            <div style={{ marginBottom:20 }}>
+              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#6b7280', letterSpacing:'0.05em', textTransform:'uppercase', marginBottom:6 }}>
+                What are you looking for? <span style={{ fontWeight:400, color:'#b0a99f' }}>(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={intent}
+                onChange={e => setIntent(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && search(false)}
+                placeholder="e.g. quiet coffee shop to work from · romantic date spot · cheap drinks with friends"
+                style={{
+                  width:'100%', border:'1.5px solid #e8e2db', borderRadius:10,
+                  padding:'13px 16px', fontSize:14, color:'#1a1a1a',
+                  outline:'none', transition:'border-color 0.15s ease',
+                  fontFamily:"'Inter', system-ui, sans-serif", background:'#fff',
+                  boxSizing:'border-box',
+                }}
+                onFocus={e => e.target.style.borderColor='#e85d26'}
+                onBlur={e => e.target.style.borderColor='#e8e2db'}
+              />
             </div>
 
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16, marginBottom:20 }}>
+            {/* Row 1: location / occasion / vibe */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:16, marginBottom:16 }}>
+              <SelectField label="Neighbourhood" value={form.location} onChange={v => set('location',v)} options={NEIGHBOURHOODS} placeholder="All Toronto" optional />
+              <SelectField label="Occasion"      value={form.occasion} onChange={v => set('occasion',v)} options={OCCASIONS}      placeholder="Any occasion" optional />
+              <SelectField label="Vibe"          value={form.vibe}     onChange={v => set('vibe',v)}     options={VIBES}          placeholder="Any vibe"    optional />
+            </div>
+
+            {/* Row 2: cuisine / day / time */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16, marginBottom:16 }}>
               <CuisineMultiselect selected={selectedCuisines} onChange={setSelectedCuisines} />
-              <SelectField label="Day" value={form.day} onChange={v => set('day',v)} options={DAYS} placeholder="Day" />
+              <SelectField label="Day"  value={form.day}  onChange={v => set('day',v)}  options={DAYS}  placeholder="Day" />
               <SelectField label="Time" value={form.time} onChange={v => set('time',v)} options={TIMES} placeholder="Time" />
             </div>
 
+            {/* Row 3: price chips + open now toggle */}
+            <div style={{ display:'flex', alignItems:'center', flexWrap:'wrap', gap:10, marginBottom:20 }}>
+              <span style={{ fontSize:12, fontWeight:600, color:'#9ca3af', letterSpacing:'0.05em', textTransform:'uppercase' }}>Price</span>
+              {[0,1,2,3,4].map(p => (
+                <button key={p} type="button"
+                  onClick={() => setPriceFilter(priceFilter === p && p !== 0 ? 0 : p)}
+                  style={{
+                    padding:'5px 13px', borderRadius:99, fontSize:13, fontWeight:600, cursor:'pointer',
+                    border: priceFilter === p ? '1.5px solid #e85d26' : '1.5px solid #e8e2db',
+                    background: priceFilter === p ? '#fff7f0' : '#fff',
+                    color: priceFilter === p ? '#e85d26' : '#6b7280',
+                    transition:'all 0.15s',
+                  }}
+                >{p === 0 ? 'All' : '$'.repeat(p)}</button>
+              ))}
+              <div style={{ marginLeft:'auto' }}>
+                <button type="button" onClick={() => setOpenNow(x => !x)}
+                  style={{
+                    display:'flex', alignItems:'center', gap:6,
+                    padding:'6px 14px', borderRadius:99, fontSize:13, fontWeight:600, cursor:'pointer',
+                    border: openNow ? '1.5px solid #16a34a' : '1.5px solid #e8e2db',
+                    background: openNow ? '#f0fdf4' : '#fff',
+                    color: openNow ? '#16a34a' : '#6b7280',
+                    transition:'all 0.15s',
+                  }}
+                >
+                  <span style={{ width:8, height:8, borderRadius:'50%', background: openNow ? '#16a34a' : '#d1d5db', display:'inline-block', transition:'background 0.15s' }} />
+                  Open now
+                </button>
+              </div>
+            </div>
+
+            {/* Active cuisine chips */}
             {selectedCuisines.length > 0 && selectedCuisines.length <= 6 && (
               <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:16 }}>
                 {selectedCuisines.map(c => (
                   <button key={c} type="button" onClick={() => setSelectedCuisines(selectedCuisines.filter(x => x !== c))}
                     style={{ display:'flex', alignItems:'center', gap:4, fontSize:12, fontWeight:500, padding:'3px 10px', borderRadius:99, background:'#fff7f0', color:'#e85d26', border:'1px solid #fdc9a8', cursor:'pointer' }}
-                  >
-                    {c} <span style={{ fontSize:10, fontWeight:700 }}>{String.fromCharCode(215)}</span>
-                  </button>
+                  >{c} <span style={{ fontSize:10, fontWeight:700 }}>{String.fromCharCode(215)}</span></button>
                 ))}
               </div>
             )}
@@ -492,28 +558,21 @@ export default function Home() {
             )}
 
             <div style={{ display:'flex', gap:12 }}>
-              <button
-                onClick={() => search(false)}
-                disabled={loading}
+              <button onClick={() => search(false)} disabled={loading}
                 style={{ flex:1, background: !loading ? '#e85d26' : '#d1d5db', color:'#fff', border:'none', borderRadius:12, padding:'14px 24px', fontSize:15, fontWeight:700, cursor: !loading ? 'pointer' : 'not-allowed', transition:'background 0.2s' }}
                 onMouseEnter={e => { if (!loading) e.target.style.background='#d44e1a'; }}
                 onMouseLeave={e => { if (!loading) e.target.style.background='#e85d26'; }}
-              >
-                {loading ? 'Finding...' : 'Find Restaurants'}
-              </button>
-              <button
-                onClick={() => search(true)}
-                disabled={loading}
+              >{loading ? 'Finding...' : 'Find Restaurants'}</button>
+              <button onClick={() => search(true)} disabled={loading}
                 style={{ background:'#1a1a1a', color:'#fff', border:'none', borderRadius:12, padding:'14px 20px', fontSize:15, fontWeight:600, cursor: loading ? 'not-allowed' : 'pointer', whiteSpace:'nowrap', transition:'background 0.2s' }}
                 onMouseEnter={e => { if (!loading) e.target.style.background='#374151'; }}
                 onMouseLeave={e => { if (!loading) e.target.style.background='#1a1a1a'; }}
-              >
-                Surprise Me
-              </button>
+              >Surprise Me</button>
             </div>
           </div>
         </div>
 
+        {/* Results */}
         <div style={{ padding:'40px 24px 80px', maxWidth:760, margin:'0 auto' }}>
 
           {loading && (
@@ -531,47 +590,88 @@ export default function Home() {
 
           {hasResults && !loading && (
             <>
-              <div style={{ marginBottom:24, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
-                <div>
+              {/* Results header */}
+              <div style={{ marginBottom:20, display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
+                <div style={{ flex:1 }}>
                   <h2 style={{ margin:0, fontSize:22, fontWeight:700, color:'#1a1a1a', fontFamily:'Georgia, serif' }}>
-                    {noOccasion
-                      ? `${results.length} venues \u00b7 highest rated`
-                      : <>{strongMatchCount} {strongMatchCount === 1 ? 'match' : 'matches'}{results.length - strongMatchCount > 0 && <span style={{ fontSize:16, color:'#9ca3af', fontWeight:400 }}> + {results.length - strongMatchCount} suggestions</span>}</>
+                    {intentMode
+                      ? `${displayResults.length} spots for \u201c${effectiveQuery?.intent || intent}\u201d`
+                      : noOccasion
+                      ? `${displayResults.length} venues \u00b7 highest rated`
+                      : <>{displayStrongCount} {displayStrongCount === 1 ? 'match' : 'matches'}{displayResults.length - displayStrongCount > 0 && <span style={{ fontSize:16, color:'#9ca3af', fontWeight:400 }}> + {displayResults.length - displayStrongCount} suggestions</span>}</>
                     }
                   </h2>
+
                   {effectiveQuery && (
                     <p style={{ margin:'4px 0 0', fontSize:13, color:'#9ca3af' }}>
                       {effectiveQuery.location || 'All Toronto'}
                       {effectiveQuery.occasion ? ` \u00b7 ${effectiveQuery.occasion}` : ''}
-                      {effectiveQuery.vibe ? ` \u00b7 ${effectiveQuery.vibe} vibe` : ''}
+                      {effectiveQuery.vibe     ? ` \u00b7 ${effectiveQuery.vibe} vibe` : ''}
                       {' \u00b7 '}{effectiveQuery.day} {effectiveQuery.time}
                     </p>
                   )}
+
+                  {/* Intent matched tags */}
+                  {intentMode && matchedTags.length > 0 && (
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:10 }}>
+                      {matchedTags.map(tag => (
+                        <span key={tag} style={{
+                          fontSize:12, fontWeight:600, padding:'3px 11px', borderRadius:99,
+                          background:'#fff7f0', color:'#e85d26', border:'1px solid #fdc9a8',
+                        }}>{tag}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Active client-side filter indicators */}
+                  {(openNow || priceFilter > 0) && (
+                    <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:8 }}>
+                      {openNow && (
+                        <span style={{ fontSize:12, fontWeight:600, padding:'2px 10px', borderRadius:99, background:'#f0fdf4', color:'#16a34a', border:'1px solid #bbf7d0' }}>
+                          Open now
+                        </span>
+                      )}
+                      {priceFilter > 0 && (
+                        <span style={{ fontSize:12, fontWeight:600, padding:'2px 10px', borderRadius:99, background:'#fff7f0', color:'#e85d26', border:'1px solid #fdc9a8' }}>
+                          {'$'.repeat(priceFilter)}
+                        </span>
+                      )}
+                      {displayResults.length < (results || []).length && (
+                        <span style={{ fontSize:12, color:'#9ca3af', padding:'2px 0' }}>
+                          {(results || []).length - displayResults.length} hidden by filters
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <button
-                  onClick={() => { setResults(null); setEffectiveQuery(null); }}
-                  style={{ background:'none', border:'1.5px solid #e8e2db', borderRadius:8, padding:'6px 14px', fontSize:13, color:'#6b7280', cursor:'pointer', fontWeight:500 }}
-                >
-                  {'\u2190'} New search
-                </button>
+
+                <button onClick={() => { setResults(null); setEffectiveQuery(null); setIntentMode(false); setMatchedTags([]); }}
+                  style={{ background:'none', border:'1.5px solid #e8e2db', borderRadius:8, padding:'6px 14px', fontSize:13, color:'#6b7280', cursor:'pointer', fontWeight:500, flexShrink:0 }}
+                >{'\u2190'} New search</button>
               </div>
 
-              {!noOccasion && strongMatchCount === 0 && (
+              {!intentMode && !noOccasion && displayStrongCount === 0 && (
                 <div style={{ background:'#fff', borderRadius:12, padding:'16px 20px', marginBottom:16, border:'1px solid #f0ede8', fontSize:14, color:'#6b7280' }}>
                   No perfect matches found {'\u2014'} showing nearby suggestions below.
                 </div>
               )}
 
+              {displayResults.length === 0 && (
+                <div style={{ background:'#fff', borderRadius:12, padding:'24px 20px', textAlign:'center', border:'1px solid #f0ede8', fontSize:14, color:'#6b7280' }}>
+                  No venues match your current filters. Try turning off Open now or changing the price range.
+                </div>
+              )}
+
               <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-                {noOccasion
-                  ? results.map((r, i) => <RestaurantCard key={r.id} r={r} index={i} />)
+                {(intentMode || noOccasion)
+                  ? displayResults.map((r, i) => <RestaurantCard key={r.id} r={r} index={i} />)
                   : (
                     <>
-                      {results.slice(0, strongMatchCount).map((r, i) => <RestaurantCard key={r.id} r={r} index={i} />)}
-                      {results.length > strongMatchCount && (
+                      {displayResults.slice(0, displayStrongCount).map((r, i) => <RestaurantCard key={r.id} r={r} index={i} />)}
+                      {displayResults.length > displayStrongCount && (
                         <>
                           <YMALSeparator />
-                          {results.slice(strongMatchCount).map((r, i) => <RestaurantCard key={r.id} r={r} index={i + strongMatchCount} />)}
+                          {displayResults.slice(displayStrongCount).map((r, i) => <RestaurantCard key={r.id} r={r} index={i + displayStrongCount} />)}
                         </>
                       )}
                     </>
@@ -585,7 +685,7 @@ export default function Home() {
             <div style={{ textAlign:'center', padding:'48px 0', color:'#b0a99f' }}>
               <div style={{ fontSize:48, marginBottom:12 }}>🍽️</div>
               <p style={{ margin:0, fontSize:16, fontWeight:500 }}>Your picks will appear here</p>
-              <p style={{ margin:'8px 0 0', fontSize:14 }}>Pick a day and time above, or hit Surprise Me</p>
+              <p style={{ margin:'8px 0 0', fontSize:14 }}>Try: &ldquo;quiet spot to work&rdquo;, &ldquo;romantic dinner&rdquo;, or hit Surprise Me</p>
             </div>
           )}
         </div>
@@ -598,7 +698,7 @@ export default function Home() {
       </div>
 
       <style>{`
-        @keyframes fadeUp  { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:translateY(0) } }
+        @keyframes fadeUp   { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:translateY(0) } }
         @keyframes pulseSoft { 0%,100% { opacity:1 } 50% { opacity:0.5 } }
         * { box-sizing:border-box } body { margin:0 } select option { color:#1a1a1a }
         ::-webkit-scrollbar { width:6px } ::-webkit-scrollbar-track { background:#f5f0eb }

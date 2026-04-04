@@ -4,6 +4,7 @@ import { rankRestaurants, parseTimeHour, isOpenAt } from '../../lib/scorer';
 import { getNearestTransit } from '../../lib/transit';
 import { getBusyness } from '../../lib/busyness';
 import { hasYelpKey, searchYelp, mapYelpBusiness } from '../../lib/yelp';
+import { rankByIntent, getMatchedTags, parseIntent } from '../../lib/vibe-engine';
 
 // ─── Pre-compute base (curated) venues at module load ─────────────────────────
 const baseRestaurants = enrichAll(restaurants).map(r => ({
@@ -12,11 +13,8 @@ const baseRestaurants = enrichAll(restaurants).map(r => ({
 }));
 
 // ─── Load Google crawled venues if available ──────────────────────────────────
-// Run scripts/crawl-google-places.js to generate data/restaurants-google.js,
-// then commit the file. The app picks it up automatically on next deploy.
 let googleRestaurants = [];
 try {
-  // Dynamic require so a missing file is a soft error, not a build failure
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const raw = require('../../data/restaurants-google');
   const baseNames = new Set(baseRestaurants.map(r => r.name.toLowerCase().trim()));
@@ -25,14 +23,12 @@ try {
     ...r,
     transit: getNearestTransit(r.coordinates),
   }));
-  console.log(`[recommend] Loaded ${googleRestaurants.length} Google venues (${raw.length - deduped.length} deduped against curated set)`);
+  console.log(`[recommend] Loaded ${googleRestaurants.length} Google venues`);
 } catch {
-  // File not yet generated — run scripts/crawl-google-places.js to add data
+  // File not yet generated
 }
 
 // ─── Load OSM venues if available ────────────────────────────────────────────
-// Run scripts/crawl-osm.js (free, no API key) to generate data/restaurants-osm.js,
-// then commit the file. Deduped against both curated and Google layers by name.
 let osmRestaurants = [];
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -45,9 +41,9 @@ try {
     ...r,
     transit: getNearestTransit(r.coordinates),
   }));
-  console.log(`[recommend] Loaded ${osmRestaurants.length} OSM venues (${raw.length - deduped.length} deduped against curated+Google set)`);
+  console.log(`[recommend] Loaded ${osmRestaurants.length} OSM venues`);
 } catch {
-  // File not yet generated — run scripts/crawl-osm.js to add free OSM data
+  // File not yet generated
 }
 
 const VALID_OCCASIONS = [
@@ -109,6 +105,7 @@ export default async function handler(req, res) {
     day      = 'Friday',
     surprise = false,
     cuisines,
+    intent   = '',       // free-text intent query (the vibe engine input)
   } = raw;
 
   let params = {
@@ -118,12 +115,16 @@ export default async function handler(req, res) {
     time:     time     || '7:00 PM',
     day:      day      || 'Friday',
     cuisines: parseCuisines(cuisines),
+    intent:   (intent || '').trim(),
   };
 
-  const noOccasion = !params.occasion;
+  const hasIntent  = !!params.intent;
+  const noOccasion = !params.occasion && !hasIntent;
 
   if (surprise === 'true' || surprise === true) {
-    const allN = [...new Set([...baseRestaurants, ...googleRestaurants, ...osmRestaurants].map(r => r.neighbourhood))];
+    const allN = [...new Set(
+      [...baseRestaurants, ...googleRestaurants, ...osmRestaurants].map(r => r.neighbourhood)
+    )];
     const surpriseLocation = Math.random() > 0.4
       ? allN[Math.floor(Math.random() * allN.length)]
       : '';
@@ -132,10 +133,10 @@ export default async function handler(req, res) {
     if (hour < 11) occasionPool = ['breakfast', 'coffee', 'brunch'];
     else if (hour < 15) occasionPool = ['brunch', 'casual dinner', 'coffee', 'catching up'];
     params = {
-      location: surpriseLocation,
-      occasion: occasionPool[Math.floor(Math.random() * occasionPool.length)],
-      vibe:     VALID_VIBES[Math.floor(Math.random() * VALID_VIBES.length)],
-      time, day, cuisines: [],
+      location:  surpriseLocation,
+      occasion:  occasionPool[Math.floor(Math.random() * occasionPool.length)],
+      vibe:      VALID_VIBES[Math.floor(Math.random() * VALID_VIBES.length)],
+      time, day, cuisines: [], intent: '',
     };
   } else {
     if (params.occasion && !VALID_OCCASIONS.includes(params.occasion)) {
@@ -146,11 +147,9 @@ export default async function handler(req, res) {
     }
   }
 
-  // ─── Build dataset: curated + Google + OSM + optional live Yelp ──────────
-  // Curated and crawled layers are merged and deduped at module load (above).
+  // ─── Build full dataset ────────────────────────────────────────────────────
   let allRestaurants = [...baseRestaurants, ...googleRestaurants, ...osmRestaurants];
 
-  // Optionally layer live Yelp results on top when a neighbourhood is selected
   if (hasYelpKey() && params.location) {
     try {
       const yelpBizs = await searchYelp({ location: params.location, limit: 50 });
@@ -164,9 +163,7 @@ export default async function handler(req, res) {
           });
         allRestaurants = [...allRestaurants, ...newFromYelp];
       }
-    } catch {
-      // Yelp failed — continue with existing data
-    }
+    } catch { /* Yelp failed */ }
   }
 
   const meta_sources = {
@@ -176,21 +173,59 @@ export default async function handler(req, res) {
     total:   allRestaurants.length,
   };
 
-  // ─── Rating-first mode (no occasion selected) ─────────────────────────────
+  // Helper: attach busyness to a ranked list
+  function withBusyness(ranked) {
+    return ranked.map(r => ({
+      ...r,
+      busyness: getBusyness(r, params.day, params.time),
+    }));
+  }
+
+  // ─── Cuisine pre-filter (applied in all non-surprise modes) ───────────────
+  let pool = allRestaurants;
+  if (!(surprise === 'true' || surprise === true) && params.cuisines.length > 0) {
+    pool = pool.filter(r =>
+      params.cuisines.some(c => (r.cuisineCategories || []).includes(c))
+    );
+    if (pool.length === 0) pool = allRestaurants; // fallback if filter is too narrow
+  }
+
+  // ─── MODE 1: Intent (vibe engine) ───────────────────────────────────────
+  if (hasIntent && !(surprise === 'true' || surprise === true)) {
+    const intentRanked = rankByIntent(pool, params.intent, params);
+    if (intentRanked) {
+      const top              = withBusyness(intentRanked).slice(0, 18);
+      const strongMatchCount = top.filter(r => r.isStrongMatch).length;
+      const weights          = parseIntent(params.intent);
+      const matchedTags      = weights ? getMatchedTags(weights) : [];
+
+      return res.status(200).json({
+        results:          top.map(r => serialise(r, params.time)),
+        strongMatchCount,
+        noOccasion:       false,
+        intentMode:       true,
+        matchedTags,
+        intent:           params.intent,
+        query:            params,
+        meta:             {
+          ...meta_sources, strongMatchCount,
+          suggestionCount: top.length - strongMatchCount,
+          generatedAt: new Date().toISOString(),
+        },
+      });
+    }
+    // Intent unrecognised — fall through to rating sort
+  }
+
+  // ─── MODE 2: Rating-first (no occasion, no intent) ────────────────────
   if (noOccasion && !(surprise === 'true' || surprise === true)) {
-    const selectedCuisines = params.cuisines;
-    const mapped = allRestaurants
+    const mapped = pool
       .map(r => {
-        if (selectedCuisines.length > 0) {
-          const rCats = r.cuisineCategories || [];
-          if (!selectedCuisines.some(c => rCats.includes(c))) return null;
-        }
         const locationMatch = !params.location ||
           r.neighbourhood.toLowerCase() === params.location.toLowerCase();
-        const busynessData = getBusyness(r, params.day, params.time);
-        const open  = isOpenAt(r, params.time);
-        // Score = rating (0–5 scaled to 0–90) + location bonus
-        const score = open
+        const busynessData  = getBusyness(r, params.day, params.time);
+        const open          = isOpenAt(r, params.time);
+        const score         = open
           ? Math.max(0, Math.round(r.rating * 18) + (locationMatch ? 5 : 0))
           : 0;
         return {
@@ -208,7 +243,6 @@ export default async function handler(req, res) {
         const aOpen = isOpenAt(a, params.time);
         const bOpen = isOpenAt(b, params.time);
         if (aOpen !== bOpen) return aOpen ? -1 : 1;
-        // Primary: rating descending; secondary: review count descending (breaks ties)
         if (b.rating !== a.rating) return b.rating - a.rating;
         return (b.reviewCount || 0) - (a.reviewCount || 0);
       });
@@ -220,21 +254,33 @@ export default async function handler(req, res) {
       results:          top.map(r => serialise(r, params.time)),
       strongMatchCount,
       noOccasion:       true,
+      intentMode:       false,
+      matchedTags:      [],
       query:            params,
-      meta:             { ...meta_sources, strongMatchCount, suggestionCount: top.length - strongMatchCount, generatedAt: new Date().toISOString() },
+      meta:             {
+        ...meta_sources, strongMatchCount,
+        suggestionCount: top.length - strongMatchCount,
+        generatedAt: new Date().toISOString(),
+      },
     });
   }
 
-  // ─── Normal occasion-based ranking ───────────────────────────────────────
-  const ranked           = rankRestaurants(allRestaurants, params);
-  const top              = ranked.slice(0, 18);
+  // ─── MODE 3: Occasion-based ranking ───────────────────────────────────
+  const ranked           = rankRestaurants(pool, params);
+  const top              = withBusyness(ranked).slice(0, 18);
   const strongMatchCount = top.filter(r => r.isStrongMatch).length;
 
   return res.status(200).json({
     results:          top.map(r => serialise(r, params.time)),
     strongMatchCount,
     noOccasion:       false,
+    intentMode:       false,
+    matchedTags:      [],
     query:            params,
-    meta:             { ...meta_sources, strongMatchCount, suggestionCount: top.length - strongMatchCount, generatedAt: new Date().toISOString() },
+    meta:             {
+      ...meta_sources, strongMatchCount,
+      suggestionCount: top.length - strongMatchCount,
+      generatedAt: new Date().toISOString(),
+    },
   });
 }
