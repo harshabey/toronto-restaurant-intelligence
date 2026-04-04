@@ -109,13 +109,14 @@ function Tag({ children, accent }) {
 function MatchBadge({ score }) {
   const color = score >= 80 ? '#16a34a' : score >= 60 ? '#e85d26' : '#9ca3af';
   const bg    = score >= 80 ? '#f0fdf4' : score >= 60 ? '#fff7f0' : '#f9fafb';
+  const icon  = score >= 80 ? '\u2605' : score >= 60 ? '\u2713' : '\u00b7';
   return (
     <div style={{
       display:'inline-flex', alignItems:'center', gap:4,
       fontSize:12, fontWeight:700, color, background:bg,
       border:`1px solid ${color}30`, borderRadius:8, padding:'4px 10px',
     }}>
-      {score >= 80 ? '\u2605' : score >= 60 ? '\u2713' : '\u00b7'} {score}% match
+      {icon} {score}% match
     </div>
   );
 }
@@ -125,6 +126,16 @@ function VenueTypePill({ r }) {
   if (r.isBar) return <span style={{ fontSize:11, background:'#fef3c7', color:'#92400e', padding:'2px 8px', borderRadius:99, fontWeight:600 }}>🍺 Bar</span>;
   if (r.isCafe) return <span style={{ fontSize:11, background:'#f0fdf4', color:'#166534', padding:'2px 8px', borderRadius:99, fontWeight:600 }}>☕ Cafe</span>;
   return null;
+}
+
+function HoursLine({ r }) {
+  if (!r.openTime || !r.closeTime) return null;
+  const isOpen = r.isOpenAtTime;
+  return (
+    <span style={{ fontSize:12, color: isOpen ? '#16a34a' : '#ef4444', fontWeight:500, marginLeft:6 }}>
+      {isOpen ? '\uD83D\uDD50' : '\u26D4'} {r.openTime} \u2013 {r.closeTime}
+    </span>
+  );
 }
 
 function RestaurantCard({ r, index }) {
@@ -154,27 +165,27 @@ function RestaurantCard({ r, index }) {
       }} />
 
       <div style={{ padding:'20px 24px 24px' }}>
-        {/* Header */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12, marginBottom:8 }}>
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:4 }}>
               <h3 style={{ margin:0, fontSize:19, fontWeight:700, color:'#1a1a1a', lineHeight:1.2, fontFamily:'Georgia, serif' }}>{r.name}</h3>
               <VenueTypePill r={r} />
             </div>
-            <p style={{ margin:0, fontSize:13, color:'#6b7280' }}>
+            <p style={{ margin:0, fontSize:13, color:'#6b7280', display:'flex', alignItems:'center', flexWrap:'wrap', gap:4 }}>
               {r.neighbourhood} &middot; {r.cuisine} &middot; {PRICE_SYMBOLS[r.priceLevel]}
+              <HoursLine r={r} />
             </p>
           </div>
           <MatchBadge score={r.matchScore} />
         </div>
 
-        <div style={{ marginBottom:12 }}><StarRating rating={r.rating} />
+        <div style={{ marginBottom:12 }}>
+          <StarRating rating={r.rating} />
           <span style={{ fontSize:12, color:'#9ca3af', marginLeft:6 }}>({r.reviewCount?.toLocaleString()} reviews)</span>
         </div>
 
         <p style={{ margin:'0 0 12px', fontSize:14, color:'#374151', lineHeight:1.6 }}>{r.vibeDescription}</p>
 
-        {/* Why it fits */}
         <div style={{ background:'#fafaf8', border:'1px solid #f0ede8', borderRadius:10, padding:'10px 14px', marginBottom:12 }}>
           <p style={{ margin:0, fontSize:13, color:'#374151', lineHeight:1.5 }}>
             <span style={{ fontWeight:600, color:'#1a1a1a' }}>Why it fits: </span>
@@ -182,20 +193,17 @@ function RestaurantCard({ r, index }) {
           </p>
         </div>
 
-        {/* Busyness */}
         <div style={{ marginBottom:14 }}>
           <p style={{ margin:'0 0 6px', fontSize:11, fontWeight:600, color:'#9ca3af', letterSpacing:'0.05em', textTransform:'uppercase' }}>Current Busyness</p>
           <BusynessBar busyness={r.busyness} />
         </div>
 
-        {/* Best-for tags */}
         {r.bestFor && r.bestFor.length > 0 && (
           <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:14 }}>
             {r.bestFor.map(tag => <Tag key={tag} accent>{tag}</Tag>)}
           </div>
         )}
 
-        {/* Expand toggle */}
         <button
           onClick={() => setExpanded(x => !x)}
           style={{ background:'none', border:'none', padding:0, cursor:'pointer', fontSize:13, color:'#e85d26', fontWeight:600 }}
@@ -205,14 +213,11 @@ function RestaurantCard({ r, index }) {
 
         {expanded && (
           <div style={{ marginTop:14, display:'flex', flexDirection:'column', gap:12 }}>
-
-            {/* Insider tip */}
             <div style={{ background:'linear-gradient(135deg,#fff7f0,#ffeedd)', border:'1px solid #fdc9a8', borderRadius:10, padding:'12px 14px' }}>
               <p style={{ margin:'0 0 4px', fontSize:11, fontWeight:700, color:'#e85d26', textTransform:'uppercase', letterSpacing:'0.05em' }}>Insider Tip</p>
               <p style={{ margin:0, fontSize:13, color:'#374151', lineHeight:1.5 }}>{r.insiderTip}</p>
             </div>
 
-            {/* Transit */}
             {r.transit && (r.transit.subway.length > 0 || r.transit.streetcar.length > 0) && (
               <div>
                 <p style={{ margin:'0 0 8px', fontSize:11, fontWeight:600, color:'#9ca3af', letterSpacing:'0.05em', textTransform:'uppercase' }}>Nearest Transit</p>
@@ -235,7 +240,6 @@ function RestaurantCard({ r, index }) {
               </div>
             )}
 
-            {/* Peak times */}
             {r.peakTimes && r.peakTimes.length > 0 && (
               <div>
                 <p style={{ margin:'0 0 6px', fontSize:11, fontWeight:600, color:'#9ca3af', letterSpacing:'0.05em', textTransform:'uppercase' }}>Peak Times</p>
@@ -243,7 +247,6 @@ function RestaurantCard({ r, index }) {
               </div>
             )}
 
-            {/* Tags */}
             {r.tags && r.tags.length > 0 && (
               <div>
                 <p style={{ margin:'0 0 6px', fontSize:11, fontWeight:600, color:'#9ca3af', letterSpacing:'0.05em', textTransform:'uppercase' }}>Known For</p>
@@ -251,7 +254,6 @@ function RestaurantCard({ r, index }) {
               </div>
             )}
 
-            {/* Review */}
             {r.googleReviews && r.googleReviews[0] && (
               <div>
                 <p style={{ margin:'0 0 4px', fontSize:11, fontWeight:600, color:'#9ca3af', letterSpacing:'0.05em', textTransform:'uppercase' }}>Guest Review</p>
@@ -259,7 +261,6 @@ function RestaurantCard({ r, index }) {
               </div>
             )}
 
-            {/* Community + address */}
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
               {r.address && <p style={{ margin:0, fontSize:12, color:'#9ca3af' }}>📍 {r.address}</p>}
               <a
@@ -303,7 +304,7 @@ function SelectField({ label, value, onChange, options, placeholder, optional })
             <option key={o.value || o} value={o.value || o}>{o.label || o}</option>
           ))}
         </select>
-        <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', pointerEvents:'none', color:'#9ca3af', fontSize:12 }}>\u25bc</span>
+        <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', pointerEvents:'none', color:'#9ca3af', fontSize:12 }}>{String.fromCharCode(9660)}</span>
       </div>
     </div>
   );
@@ -348,7 +349,7 @@ function CuisineMultiselect({ selected, onChange }) {
         >
           {label}
         </button>
-        <span style={{ position:'absolute', right:12, top:'50%', transform:`translateY(-50%) rotate(${open?180:0}deg)`, pointerEvents:'none', color:'#9ca3af', fontSize:12, transition:'transform 0.2s' }}>\u25bc</span>
+        <span style={{ position:'absolute', right:12, top:'50%', transform:`translateY(-50%) rotate(${open?180:0}deg)`, pointerEvents:'none', color:'#9ca3af', fontSize:12, transition:'transform 0.2s' }}>{String.fromCharCode(9660)}</span>
 
         {open && (
           <div style={{
@@ -358,26 +359,13 @@ function CuisineMultiselect({ selected, onChange }) {
             boxShadow:'0 8px 32px rgba(0,0,0,0.14)',
           }}>
             <div style={{ display:'flex', gap:8, marginBottom:10, paddingBottom:10, borderBottom:'1px solid #f0ede8' }}>
-              <button
-                type="button"
-                onClick={() => onChange([...CUISINE_OPTIONS])}
-                style={{ flex:1, fontSize:12, fontWeight:600, padding:'5px 0', background:'#f5f0eb', border:'none', borderRadius:6, cursor:'pointer', color:'#374151' }}
-              >Select All</button>
-              <button
-                type="button"
-                onClick={() => onChange([])}
-                style={{ flex:1, fontSize:12, fontWeight:600, padding:'5px 0', background:'#f5f0eb', border:'none', borderRadius:6, cursor:'pointer', color:'#374151' }}
-              >Clear</button>
+              <button type="button" onClick={() => onChange([...CUISINE_OPTIONS])} style={{ flex:1, fontSize:12, fontWeight:600, padding:'5px 0', background:'#f5f0eb', border:'none', borderRadius:6, cursor:'pointer', color:'#374151' }}>Select All</button>
+              <button type="button" onClick={() => onChange([])} style={{ flex:1, fontSize:12, fontWeight:600, padding:'5px 0', background:'#f5f0eb', border:'none', borderRadius:6, cursor:'pointer', color:'#374151' }}>Clear</button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'2px 12px' }}>
               {CUISINE_OPTIONS.map(c => (
                 <label key={c} style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 4px', cursor:'pointer', fontSize:13, color:'#374151', borderRadius:6 }}>
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(c)}
-                    onChange={() => toggle(c)}
-                    style={{ accentColor:'#e85d26', width:14, height:14 }}
-                  />
+                  <input type="checkbox" checked={selected.includes(c)} onChange={() => toggle(c)} style={{ accentColor:'#e85d26', width:14, height:14 }} />
                   {c}
                 </label>
               ))}
@@ -393,12 +381,7 @@ function YMALSeparator() {
   return (
     <div style={{ display:'flex', alignItems:'center', gap:12, margin:'8px 0' }}>
       <div style={{ flex:1, height:1, background:'linear-gradient(90deg,transparent,#e8e2db)' }} />
-      <div style={{
-        fontSize:12, fontWeight:600, color:'#9ca3af',
-        background:'#fff', border:'1px solid #e8e2db',
-        borderRadius:99, padding:'5px 14px', whiteSpace:'nowrap',
-        letterSpacing:'0.04em', textTransform:'uppercase',
-      }}>
+      <div style={{ fontSize:12, fontWeight:600, color:'#9ca3af', background:'#fff', border:'1px solid #e8e2db', borderRadius:99, padding:'5px 14px', whiteSpace:'nowrap', letterSpacing:'0.04em', textTransform:'uppercase' }}>
         You Might Also Like
       </div>
       <div style={{ flex:1, height:1, background:'linear-gradient(90deg,#e8e2db,transparent)' }} />
@@ -411,38 +394,34 @@ function YMALSeparator() {
 export default function Home() {
   const [form, setForm] = useState({ location:'', occasion:'', vibe:'', day:'Friday', time:'7:00 PM' });
   const [selectedCuisines, setSelectedCuisines] = useState([]);
-  const [strongMatches, setStrongMatches] = useState(null);
-  const [suggestions, setSuggestions] = useState(null);
+  const [results, setResults] = useState(null);
+  const [strongMatchCount, setStrongMatchCount] = useState(0);
+  const [noOccasion, setNoOccasion] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [effectiveQuery, setEffectiveQuery] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   async function search(surprise = false) {
-    if (!surprise && !form.occasion) {
-      setError('Please select an occasion.');
-      return;
-    }
-    setLoading(true); setError(null); setStrongMatches(null); setSuggestions(null);
+    setLoading(true); setError(null); setResults(null);
     try {
       const body = surprise
         ? { ...form, surprise: true }
         : { ...form, cuisines: selectedCuisines.join(',') };
-      const res  = await fetch('/api/recommend', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      const res = await fetch('/api/recommend', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) { setError(data.error || 'Something went wrong.'); }
       else {
-        setStrongMatches(data.strongMatches || []);
-        setSuggestions(data.suggestions || []);
+        setResults(data.results || []);
+        setStrongMatchCount(data.strongMatchCount || 0);
+        setNoOccasion(data.noOccasion || false);
         setEffectiveQuery(data.query);
       }
     } catch { setError('Network error \u2014 please try again.'); }
     finally { setLoading(false); }
   }
 
-  const hasResults = strongMatches !== null;
-  const totalResults = (strongMatches?.length || 0) + (suggestions?.length || 0);
-  const formReady = !!form.occasion;
+  const hasResults = results !== null;
 
   return (
     <>
@@ -457,7 +436,6 @@ export default function Home() {
 
       <div style={{ minHeight:'100vh', background:'#fafaf8', fontFamily:"'Inter', system-ui, sans-serif" }}>
 
-        {/* Nav */}
         <nav style={{ background:'#fff', borderBottom:'1px solid #f0ede8', padding:'0 24px' }}>
           <div style={{ maxWidth:820, margin:'0 auto', height:56, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -468,7 +446,6 @@ export default function Home() {
           </div>
         </nav>
 
-        {/* Hero */}
         <div style={{ background:'linear-gradient(160deg,#1a1a1a 0%,#2d1a0e 100%)', padding:'52px 24px 60px', textAlign:'center' }}>
           <div style={{ maxWidth:600, margin:'0 auto' }}>
             <p style={{ margin:'0 0 10px', fontSize:13, fontWeight:600, color:'#e85d26', letterSpacing:'0.1em', textTransform:'uppercase' }}>Toronto &middot; Restaurants, Bars & Cafes</p>
@@ -476,43 +453,33 @@ export default function Home() {
               Find your perfect<br />Toronto spot
             </h1>
             <p style={{ margin:0, fontSize:16, color:'#a8a29e', lineHeight:1.6 }}>
-              Pick an occasion and vibe &mdash; we rank the best matches and show exactly why they fit, with busyness estimates and transit directions.
+              Pick a day and time &mdash; we&apos;ll show the quietest spots. Add an occasion and vibe for personalised picks.
             </p>
           </div>
         </div>
 
-        {/* Search form */}
         <div style={{ padding:'0 24px', marginTop:-28 }}>
           <div style={{ maxWidth:760, margin:'0 auto', background:'#fff', borderRadius:20, boxShadow:'0 4px 24px rgba(0,0,0,0.12)', padding:'28px 28px 24px' }}>
 
-            {/* Row 1: neighbourhood + occasion + vibe */}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:16, marginBottom:16 }}>
-              <SelectField label="Neighbourhood" value={form.location} onChange={v => set('location',v)}
-                options={NEIGHBOURHOODS} placeholder="All Toronto" optional />
-              <SelectField label="Occasion" value={form.occasion} onChange={v => set('occasion',v)}
-                options={OCCASIONS} placeholder="What's the occasion?" />
-              <SelectField label="Vibe" value={form.vibe} onChange={v => set('vibe',v)}
-                options={VIBES} placeholder="Any vibe" optional />
+              <SelectField label="Neighbourhood" value={form.location} onChange={v => set('location',v)} options={NEIGHBOURHOODS} placeholder="All Toronto" optional />
+              <SelectField label="Occasion" value={form.occasion} onChange={v => set('occasion',v)} options={OCCASIONS} placeholder="Any occasion" optional />
+              <SelectField label="Vibe" value={form.vibe} onChange={v => set('vibe',v)} options={VIBES} placeholder="Any vibe" optional />
             </div>
 
-            {/* Row 2: cuisine + day + time */}
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16, marginBottom:20 }}>
               <CuisineMultiselect selected={selectedCuisines} onChange={setSelectedCuisines} />
               <SelectField label="Day" value={form.day} onChange={v => set('day',v)} options={DAYS} placeholder="Day" />
               <SelectField label="Time" value={form.time} onChange={v => set('time',v)} options={TIMES} placeholder="Time" />
             </div>
 
-            {/* Selected cuisine chips */}
             {selectedCuisines.length > 0 && selectedCuisines.length <= 6 && (
               <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:16 }}>
                 {selectedCuisines.map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setSelectedCuisines(selectedCuisines.filter(x => x !== c))}
+                  <button key={c} type="button" onClick={() => setSelectedCuisines(selectedCuisines.filter(x => x !== c))}
                     style={{ display:'flex', alignItems:'center', gap:4, fontSize:12, fontWeight:500, padding:'3px 10px', borderRadius:99, background:'#fff7f0', color:'#e85d26', border:'1px solid #fdc9a8', cursor:'pointer' }}
                   >
-                    {c} <span style={{ fontSize:10, fontWeight:700 }}>\u00d7</span>
+                    {c} <span style={{ fontSize:10, fontWeight:700 }}>{String.fromCharCode(215)}</span>
                   </button>
                 ))}
               </div>
@@ -525,16 +492,10 @@ export default function Home() {
             <div style={{ display:'flex', gap:12 }}>
               <button
                 onClick={() => search(false)}
-                disabled={loading || !formReady}
-                style={{
-                  flex:1, background: formReady && !loading ? '#e85d26' : '#d1d5db',
-                  color:'#fff', border:'none', borderRadius:12, padding:'14px 24px',
-                  fontSize:15, fontWeight:700,
-                  cursor: formReady && !loading ? 'pointer' : 'not-allowed',
-                  transition:'background 0.2s',
-                }}
-                onMouseEnter={e => { if (formReady && !loading) e.target.style.background='#d44e1a'; }}
-                onMouseLeave={e => { if (formReady && !loading) e.target.style.background='#e85d26'; }}
+                disabled={loading}
+                style={{ flex:1, background: !loading ? '#e85d26' : '#d1d5db', color:'#fff', border:'none', borderRadius:12, padding:'14px 24px', fontSize:15, fontWeight:700, cursor: !loading ? 'pointer' : 'not-allowed', transition:'background 0.2s' }}
+                onMouseEnter={e => { if (!loading) e.target.style.background='#d44e1a'; }}
+                onMouseLeave={e => { if (!loading) e.target.style.background='#e85d26'; }}
               >
                 {loading ? 'Finding...' : 'Find Restaurants'}
               </button>
@@ -551,7 +512,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Results */}
         <div style={{ padding:'40px 24px 80px', maxWidth:760, margin:'0 auto' }}>
 
           {loading && (
@@ -572,8 +532,10 @@ export default function Home() {
               <div style={{ marginBottom:24, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
                 <div>
                   <h2 style={{ margin:0, fontSize:22, fontWeight:700, color:'#1a1a1a', fontFamily:'Georgia, serif' }}>
-                    {strongMatches.length} {strongMatches.length === 1 ? 'match' : 'matches'}
-                    {suggestions.length > 0 && <span style={{ fontSize:16, color:'#9ca3af', fontWeight:400 }}> + {suggestions.length} suggestions</span>}
+                    {noOccasion
+                      ? `${results.length} venues \u00b7 sorted by quietest`
+                      : <>{strongMatchCount} {strongMatchCount === 1 ? 'match' : 'matches'}{results.length - strongMatchCount > 0 && <span style={{ fontSize:16, color:'#9ca3af', fontWeight:400 }}> + {results.length - strongMatchCount} suggestions</span>}</>
+                    }
                   </h2>
                   {effectiveQuery && (
                     <p style={{ margin:'4px 0 0', fontSize:13, color:'#9ca3af' }}>
@@ -585,37 +547,43 @@ export default function Home() {
                   )}
                 </div>
                 <button
-                  onClick={() => { setStrongMatches(null); setSuggestions(null); setEffectiveQuery(null); }}
+                  onClick={() => { setResults(null); setEffectiveQuery(null); }}
                   style={{ background:'none', border:'1.5px solid #e8e2db', borderRadius:8, padding:'6px 14px', fontSize:13, color:'#6b7280', cursor:'pointer', fontWeight:500 }}
                 >
-                  &larr; New search
+                  \u2190 New search
                 </button>
               </div>
 
-              {strongMatches.length === 0 && (
+              {!noOccasion && strongMatchCount === 0 && (
                 <div style={{ background:'#fff', borderRadius:12, padding:'16px 20px', marginBottom:16, border:'1px solid #f0ede8', fontSize:14, color:'#6b7280' }}>
-                  No perfect matches found — showing nearby suggestions below.
+                  No perfect matches found \u2014 showing nearby suggestions below.
                 </div>
               )}
 
               <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-                {strongMatches.map((r, i) => <RestaurantCard key={r.id} r={r} index={i} />)}
-
-                {suggestions.length > 0 && (
-                  <>
-                    <YMALSeparator />
-                    {suggestions.map((r, i) => <RestaurantCard key={r.id} r={r} index={i + strongMatches.length} />)}
-                  </>
-                )}
+                {noOccasion
+                  ? results.map((r, i) => <RestaurantCard key={r.id} r={r} index={i} />)
+                  : (
+                    <>
+                      {results.slice(0, strongMatchCount).map((r, i) => <RestaurantCard key={r.id} r={r} index={i} />)}
+                      {results.length > strongMatchCount && (
+                        <>
+                          <YMALSeparator />
+                          {results.slice(strongMatchCount).map((r, i) => <RestaurantCard key={r.id} r={r} index={i + strongMatchCount} />)}
+                        </>
+                      )}
+                    </>
+                  )
+                }
               </div>
             </>
           )}
 
           {!hasResults && !loading && (
             <div style={{ textAlign:'center', padding:'48px 0', color:'#b0a99f' }}>
-              <div style={{ fontSize:48, marginBottom:12 }}>🍽️</div>
+              <div style={{ fontSize:48, marginBottom:12 }}>🍽\uFE0F</div>
               <p style={{ margin:0, fontSize:16, fontWeight:500 }}>Your picks will appear here</p>
-              <p style={{ margin:'8px 0 0', fontSize:14 }}>Select an occasion above, or hit Surprise Me</p>
+              <p style={{ margin:'8px 0 0', fontSize:14 }}>Pick a day and time above, or hit Surprise Me</p>
             </div>
           )}
         </div>
