@@ -128,12 +128,13 @@ function VenueTypePill({ r }) {
   return null;
 }
 
+// FIX: all special chars inside {} so JS processes the escapes, not JSX text parser
 function HoursLine({ r }) {
   if (!r.openTime || !r.closeTime) return null;
   const isOpen = r.isOpenAtTime;
   return (
     <span style={{ fontSize:12, color: isOpen ? '#16a34a' : '#ef4444', fontWeight:500, marginLeft:6 }}>
-      {isOpen ? '\uD83D\uDD50' : '\u26D4'} {r.openTime} \u2013 {r.closeTime}
+      {isOpen ? '\uD83D\uDD50' : '\u26D4'} {r.openTime}{' \u2013 '}{r.closeTime}
     </span>
   );
 }
@@ -550,13 +551,13 @@ export default function Home() {
                   onClick={() => { setResults(null); setEffectiveQuery(null); }}
                   style={{ background:'none', border:'1.5px solid #e8e2db', borderRadius:8, padding:'6px 14px', fontSize:13, color:'#6b7280', cursor:'pointer', fontWeight:500 }}
                 >
-                  \u2190 New search
+                  {'\u2190'} New search
                 </button>
               </div>
 
               {!noOccasion && strongMatchCount === 0 && (
                 <div style={{ background:'#fff', borderRadius:12, padding:'16px 20px', marginBottom:16, border:'1px solid #f0ede8', fontSize:14, color:'#6b7280' }}>
-                  No perfect matches found \u2014 showing nearby suggestions below.
+                  No perfect matches found {'\u2014'} showing nearby suggestions below.
                 </div>
               )}
 
@@ -581,7 +582,7 @@ export default function Home() {
 
           {!hasResults && !loading && (
             <div style={{ textAlign:'center', padding:'48px 0', color:'#b0a99f' }}>
-              <div style={{ fontSize:48, marginBottom:12 }}>🍽\uFE0F</div>
+              <div style={{ fontSize:48, marginBottom:12 }}>🍽️</div>
               <p style={{ margin:0, fontSize:16, fontWeight:500 }}>Your picks will appear here</p>
               <p style={{ margin:'8px 0 0', fontSize:14 }}>Pick a day and time above, or hit Surprise Me</p>
             </div>
