@@ -17,7 +17,7 @@ const OCCASIONS = [
   { value: 'celebration',    label: 'Celebration' },
   { value: 'business',       label: 'Business' },
   { value: 'family dinner',  label: 'Family Dinner' },
-  { value: 'small group',    label: 'Small Group (3–5)' },
+  { value: 'small group',    label: 'Small Group (3\u20135)' },
   { value: 'large group',    label: 'Large Group (6+)' },
   { value: 'solo',           label: 'Solo Dining' },
   { value: 'brunch',         label: 'Brunch' },
@@ -128,7 +128,6 @@ function VenueTypePill({ r }) {
   return null;
 }
 
-// FIX: all special chars inside {} so JS processes the escapes, not JSX text parser
 function HoursLine({ r }) {
   if (!r.openTime || !r.closeTime) return null;
   const isOpen = r.isOpenAtTime;
@@ -401,6 +400,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [effectiveQuery, setEffectiveQuery] = useState(null);
+  const [totalVenues, setTotalVenues] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   async function search(surprise = false) {
@@ -417,6 +417,7 @@ export default function Home() {
         setStrongMatchCount(data.strongMatchCount || 0);
         setNoOccasion(data.noOccasion || false);
         setEffectiveQuery(data.query);
+        if (data.meta?.total) setTotalVenues(data.meta.total);
       }
     } catch { setError('Network error \u2014 please try again.'); }
     finally { setLoading(false); }
@@ -454,7 +455,7 @@ export default function Home() {
               Find your perfect<br />Toronto spot
             </h1>
             <p style={{ margin:0, fontSize:16, color:'#a8a29e', lineHeight:1.6 }}>
-              Pick a day and time &mdash; we&apos;ll show the quietest spots. Add an occasion and vibe for personalised picks.
+              Pick a day and time &mdash; we&apos;ll show the highest rated spots. Add an occasion and vibe for personalised picks.
             </p>
           </div>
         </div>
@@ -534,7 +535,7 @@ export default function Home() {
                 <div>
                   <h2 style={{ margin:0, fontSize:22, fontWeight:700, color:'#1a1a1a', fontFamily:'Georgia, serif' }}>
                     {noOccasion
-                      ? `${results.length} venues \u00b7 sorted by quietest`
+                      ? `${results.length} venues \u00b7 highest rated`
                       : <>{strongMatchCount} {strongMatchCount === 1 ? 'match' : 'matches'}{results.length - strongMatchCount > 0 && <span style={{ fontSize:16, color:'#9ca3af', fontWeight:400 }}> + {results.length - strongMatchCount} suggestions</span>}</>
                     }
                   </h2>
@@ -590,7 +591,7 @@ export default function Home() {
         </div>
 
         <div style={{ borderTop:'1px solid #f0ede8', padding:'20px 24px', textAlign:'center', fontSize:13, color:'#b0a99f' }}>
-          Toronto Table &middot; 40 curated Toronto venues &middot; Built with Next.js
+          Toronto Table &middot; {totalVenues ? `${totalVenues.toLocaleString()}+` : '2,900+'} Toronto venues &middot; Built with Next.js
           <span style={{ margin:'0 8px' }}>&middot;</span>
           <a href="https://www.yelp.com/developers/v3/manage_app" target="_blank" rel="noopener noreferrer" style={{ color:'#e85d26', textDecoration:'none' }}>Connect Yelp API for live data</a>
         </div>

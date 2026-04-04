@@ -146,7 +146,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // ─── Build dataset: curated + Google + OSM + optional live Yelp ───────────
+  // ─── Build dataset: curated + Google + OSM + optional live Yelp ──────────
   // Curated and crawled layers are merged and deduped at module load (above).
   let allRestaurants = [...baseRestaurants, ...googleRestaurants, ...osmRestaurants];
 
@@ -176,7 +176,7 @@ export default async function handler(req, res) {
     total:   allRestaurants.length,
   };
 
-  // ─── Busyness-first mode (no occasion selected) ───────────────────────────
+  // ─── Rating-first mode (no occasion selected) ─────────────────────────────
   if (noOccasion && !(surprise === 'true' || surprise === true)) {
     const selectedCuisines = params.cuisines;
     const mapped = allRestaurants
@@ -189,16 +189,17 @@ export default async function handler(req, res) {
           r.neighbourhood.toLowerCase() === params.location.toLowerCase();
         const busynessData = getBusyness(r, params.day, params.time);
         const open  = isOpenAt(r, params.time);
+        // Score = rating (0–5 scaled to 0–90) + location bonus
         const score = open
-          ? Math.max(0, Math.round(60 - busynessData.score * 4) + (locationMatch ? 10 : 0))
+          ? Math.max(0, Math.round(r.rating * 18) + (locationMatch ? 5 : 0))
           : 0;
         return {
           ...r,
           matchScore:    score,
-          isStrongMatch: open && busynessData.score <= 5,
+          isStrongMatch: open && r.rating >= 4.3,
           busyness:      busynessData,
           whyRecommended: open
-            ? `Currently ${busynessData.label.toLowerCase()} \u2014 ${busynessData.waitEstimate === 'No wait' ? 'no wait expected' : busynessData.waitEstimate + ' wait'}.`
+            ? `Rated ${r.rating.toFixed(1)}/5${r.reviewCount > 0 ? ` \u00b7 ${r.reviewCount.toLocaleString()} reviews` : ''}.`
             : 'Closed at this time.',
         };
       })
@@ -207,7 +208,9 @@ export default async function handler(req, res) {
         const aOpen = isOpenAt(a, params.time);
         const bOpen = isOpenAt(b, params.time);
         if (aOpen !== bOpen) return aOpen ? -1 : 1;
-        return (a.busyness?.score ?? 99) - (b.busyness?.score ?? 99);
+        // Primary: rating descending; secondary: review count descending (breaks ties)
+        if (b.rating !== a.rating) return b.rating - a.rating;
+        return (b.reviewCount || 0) - (a.reviewCount || 0);
       });
 
     const top              = mapped.slice(0, 18);
