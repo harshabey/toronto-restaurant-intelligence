@@ -27,7 +27,27 @@ try {
   }));
   console.log(`[recommend] Loaded ${googleRestaurants.length} Google venues (${raw.length - deduped.length} deduped against curated set)`);
 } catch {
-  // File not yet generated — run scripts/crawl-google-places.js to add real data
+  // File not yet generated — run scripts/crawl-google-places.js to add data
+}
+
+// ─── Load OSM venues if available ────────────────────────────────────────────
+// Run scripts/crawl-osm.js (free, no API key) to generate data/restaurants-osm.js,
+// then commit the file. Deduped against both curated and Google layers by name.
+let osmRestaurants = [];
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const raw = require('../../data/restaurants-osm');
+  const knownNames = new Set(
+    [...baseRestaurants, ...googleRestaurants].map(r => r.name.toLowerCase().trim())
+  );
+  const deduped = raw.filter(r => !knownNames.has((r.name || '').toLowerCase().trim()));
+  osmRestaurants = enrichAll(deduped).map(r => ({
+    ...r,
+    transit: getNearestTransit(r.coordinates),
+  }));
+  console.log(`[recommend] Loaded ${osmRestaurants.length} OSM venues (${raw.length - deduped.length} deduped against curated+Google set)`);
+} catch {
+  // File not yet generated — run scripts/crawl-osm.js to add free OSM data
 }
 
 const VALID_OCCASIONS = [
@@ -103,7 +123,7 @@ export default async function handler(req, res) {
   const noOccasion = !params.occasion;
 
   if (surprise === 'true' || surprise === true) {
-    const allN = [...new Set([...baseRestaurants, ...googleRestaurants].map(r => r.neighbourhood))];
+    const allN = [...new Set([...baseRestaurants, ...googleRestaurants, ...osmRestaurants].map(r => r.neighbourhood))];
     const surpriseLocation = Math.random() > 0.4
       ? allN[Math.floor(Math.random() * allN.length)]
       : '';
@@ -126,9 +146,9 @@ export default async function handler(req, res) {
     }
   }
 
-  // ─── Build dataset: curated + crawled + optional live Yelp ────────────────
-  // Start with curated + Google crawled (already merged and deduped at module load)
-  let allRestaurants = [...baseRestaurants, ...googleRestaurants];
+  // ─── Build dataset: curated + Google + OSM + optional live Yelp ───────────
+  // Curated and crawled layers are merged and deduped at module load (above).
+  let allRestaurants = [...baseRestaurants, ...googleRestaurants, ...osmRestaurants];
 
   // Optionally layer live Yelp results on top when a neighbourhood is selected
   if (hasYelpKey() && params.location) {
@@ -152,6 +172,7 @@ export default async function handler(req, res) {
   const meta_sources = {
     curated: baseRestaurants.length,
     google:  googleRestaurants.length,
+    osm:     osmRestaurants.length,
     total:   allRestaurants.length,
   };
 
@@ -189,7 +210,7 @@ export default async function handler(req, res) {
         return (a.busyness?.score ?? 99) - (b.busyness?.score ?? 99);
       });
 
-    const top             = mapped.slice(0, 18);
+    const top              = mapped.slice(0, 18);
     const strongMatchCount = top.filter(r => r.isStrongMatch).length;
 
     return res.status(200).json({
@@ -202,8 +223,8 @@ export default async function handler(req, res) {
   }
 
   // ─── Normal occasion-based ranking ───────────────────────────────────────
-  const ranked          = rankRestaurants(allRestaurants, params);
-  const top             = ranked.slice(0, 18);
+  const ranked           = rankRestaurants(allRestaurants, params);
+  const top              = ranked.slice(0, 18);
   const strongMatchCount = top.filter(r => r.isStrongMatch).length;
 
   return res.status(200).json({
