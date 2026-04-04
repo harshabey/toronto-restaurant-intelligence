@@ -1,10 +1,12 @@
 import restaurants from '../../data/restaurants';
 import { enrichAll } from '../../lib/enricher';
-import { rankRestaurants } from '../../lib/scorer';
+import { rankRestaurants, parseTimeHour, isOpenAt } from '../../lib/scorer';
 import { getNearestTransit } from '../../lib/transit';
+import { getBusyness } from '../../lib/busyness';
+import { hasYelpKey, searchYelp, mapYelpBusiness } from '../../lib/yelp';
 
-// Enrich and pre-compute transit once at module load
-const enrichedRestaurants = enrichAll(restaurants).map(r => ({
+// Pre-compute mock data at module load
+const baseRestaurants = enrichAll(restaurants).map(r => ({
   ...r,
   transit: getNearestTransit(r.coordinates),
 }));
@@ -29,7 +31,15 @@ function parseCuisines(raw) {
   return [];
 }
 
-function serialise(r) {
+function fmtHour(h) {
+  if (h == null) return null;
+  const wrapped = h >= 24 ? h - 24 : h;
+  const period = wrapped >= 12 ? 'PM' : 'AM';
+  const display = wrapped === 0 ? 12 : wrapped > 12 ? wrapped - 12 : wrapped;
+  return `${display}:00 ${period}`;
+}
+
+function serialise(r, time) {
   return {
     id: r.id, name: r.name, neighbourhood: r.neighbourhood,
     cuisine: r.cuisine, cuisineCategories: r.cuisineCategories || [],
@@ -42,10 +52,14 @@ function serialise(r) {
     tags: r.tags, googleReviews: r.googleReviews, address: r.address,
     transit: r.transit || { subway: [], streetcar: [] },
     isBar: r.isBar || false, isCafe: r.isCafe || false, lateNight: r.lateNight || false,
+    openHour: r.openHour, closeHour: r.closeHour,
+    openTime: fmtHour(r.openHour),
+    closeTime: fmtHour(r.closeHour),
+    isOpenAtTime: isOpenAt(r, time),
   };
 }
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   const raw = req.method === 'POST' ? req.body : req.query;
   const {
     location = '',
@@ -59,20 +73,20 @@ export default function handler(req, res) {
 
   let params = {
     location: location || '',
-    occasion,
+    occasion: occasion || '',
     vibe: vibe || '',
     time: time || '7:00 PM',
     day: day || 'Friday',
     cuisines: parseCuisines(cuisines),
   };
 
+  const noOccasion = !params.occasion;
+
   if (surprise === 'true' || surprise === true) {
-    const allN = [...new Set(enrichedRestaurants.map(r => r.neighbourhood))];
-    // Surprise: 60% chance of picking a neighbourhood, 40% all-Toronto
+    const allN = [...new Set(baseRestaurants.map(r => r.neighbourhood))];
     const surpriseLocation = Math.random() > 0.4
       ? allN[Math.floor(Math.random() * allN.length)]
       : '';
-    // Pick an occasion that makes sense for the time of day
     const hour = new Date().getHours();
     let occasionPool = VALID_OCCASIONS;
     if (hour < 11) occasionPool = ['breakfast', 'coffee', 'brunch'];
@@ -86,29 +100,100 @@ export default function handler(req, res) {
       cuisines: [],
     };
   } else {
-    if (!VALID_OCCASIONS.includes(occasion)) {
+    if (params.occasion && !VALID_OCCASIONS.includes(params.occasion)) {
       return res.status(400).json({ error: `occasion must be one of: ${VALID_OCCASIONS.join(', ')}` });
     }
-    if (vibe && !VALID_VIBES.includes(vibe)) {
+    if (params.vibe && !VALID_VIBES.includes(params.vibe)) {
       return res.status(400).json({ error: `vibe must be one of: ${VALID_VIBES.join(', ')}` });
     }
   }
 
-  const ranked = rankRestaurants(enrichedRestaurants, params);
-  const top = ranked.slice(0, 18);
+  // Merge Yelp data if key is present
+  let allRestaurants = [...baseRestaurants];
+  if (hasYelpKey() && params.location) {
+    try {
+      const yelpBizs = await searchYelp({ location: params.location, limit: 50 });
+      if (yelpBizs && yelpBizs.length > 0) {
+        const existingNames = new Set(baseRestaurants.map(r => r.name.toLowerCase().trim()));
+        const newFromYelp = yelpBizs
+          .filter(b => !existingNames.has(b.name.toLowerCase().trim()))
+          .map(b => {
+            const mapped = mapYelpBusiness(b, params.location);
+            return { ...mapped, transit: getNearestTransit(mapped.coordinates) };
+          });
+        allRestaurants = [...baseRestaurants, ...newFromYelp];
+      }
+    } catch {
+      // Yelp failed — continue with mock data
+    }
+  }
 
-  const strongMatches = top.filter(r => r.isStrongMatch).map(serialise);
-  const suggestions = top.filter(r => !r.isStrongMatch).slice(0, 6).map(serialise);
+  // Busyness-first mode when no occasion selected
+  if (noOccasion && !(surprise === 'true' || surprise === true)) {
+    const selectedCuisines = params.cuisines;
+    const mapped = allRestaurants
+      .map(r => {
+        // Cuisine hard-filter when specified
+        if (selectedCuisines.length > 0) {
+          const rCats = r.cuisineCategories || [];
+          if (!selectedCuisines.some(c => rCats.includes(c))) return null;
+        }
+        // Location soft-filter: exact match boosted, others included
+        const locationMatch = !params.location || r.neighbourhood.toLowerCase() === params.location.toLowerCase();
+        const busynessData = getBusyness(r, params.day, params.time);
+        const open = isOpenAt(r, params.time);
+        const score = open
+          ? Math.max(0, Math.round(60 - busynessData.score * 4) + (locationMatch ? 10 : 0))
+          : 0;
+        return {
+          ...r,
+          matchScore: score,
+          isStrongMatch: open && busynessData.score <= 5,
+          busyness: busynessData,
+          whyRecommended: open
+            ? `Currently ${busynessData.label.toLowerCase()} — ${busynessData.waitEstimate === 'No wait' ? 'no wait expected' : busynessData.waitEstimate + ' wait'}.`
+            : 'Closed at this time.',
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        const aOpen = isOpenAt(a, params.time);
+        const bOpen = isOpenAt(b, params.time);
+        if (aOpen !== bOpen) return aOpen ? -1 : 1;
+        return (a.busyness?.score ?? 99) - (b.busyness?.score ?? 99);
+      });
+
+    const top = mapped.slice(0, 18);
+    const strongMatchCount = top.filter(r => r.isStrongMatch).length;
+
+    return res.status(200).json({
+      results: top.map(r => serialise(r, params.time)),
+      strongMatchCount,
+      noOccasion: true,
+      query: params,
+      meta: {
+        total: mapped.length,
+        strongMatchCount,
+        suggestionCount: top.length - strongMatchCount,
+        generatedAt: new Date().toISOString(),
+      },
+    });
+  }
+
+  // Normal occasion-based ranking
+  const ranked = rankRestaurants(allRestaurants, params);
+  const top = ranked.slice(0, 18);
+  const strongMatchCount = top.filter(r => r.isStrongMatch).length;
 
   return res.status(200).json({
-    strongMatches,
-    suggestions,
-    results: [...strongMatches, ...suggestions],
+    results: top.map(r => serialise(r, params.time)),
+    strongMatchCount,
+    noOccasion: false,
     query: params,
     meta: {
       total: ranked.length,
-      strongMatchCount: strongMatches.length,
-      suggestionCount: suggestions.length,
+      strongMatchCount,
+      suggestionCount: top.length - strongMatchCount,
       generatedAt: new Date().toISOString(),
     },
   });
