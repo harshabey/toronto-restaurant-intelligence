@@ -24,7 +24,7 @@ const OCCASIONS = [
   {value:'follow-up date',label:'Follow-Up Date'},{value:'catching up',label:'Catching Up'},
   {value:'casual dinner',label:'Casual Dinner'},{value:'celebration',label:'Celebration'},
   {value:'business',label:'Business'},{value:'family dinner',label:'Family Dinner'},
-  {value:'small group',label:'Small Group (3\u20135)'},{value:'large group',label:'Large Group (6+)'},
+  {value:'small group',label:'Small Group (3-5)'},{value:'large group',label:'Large Group (6+)'},
   {value:'solo',label:'Solo Dining'},{value:'brunch',label:'Brunch'},
   {value:'breakfast',label:'Breakfast'},{value:'late night',label:'Late Night'},
   {value:'coffee',label:'Coffee'},
@@ -54,12 +54,12 @@ const TIMES = [
 ];
 const PRICE_SYMBOLS = {1:'$',2:'$$',3:'$$$',4:'$$$$'};
 const QUICK_VIBES = [
-  {label:'First Date',   query:'first date romantic',               icon:'\uD83D\uDC9D'},
-  {label:'Solo Work',    query:'quiet place to work from laptop',    icon:'\uD83D\uDCBB'},
-  {label:'Late Night',   query:'late night drinks open late',        icon:'\uD83C\uDF19'},
-  {label:'Group Dinner', query:'large group dinner',                 icon:'\uD83D\uDC65'},
-  {label:'Romantic',     query:'romantic dinner intimate',           icon:'\uD83D\uDD6F\uFE0F'},
-  {label:'Hidden Gems',  query:'cozy quiet hidden gem',             icon:'\uD83D\uDC8E'},
+  {label:'First Date',   query:'first date romantic',              icon:'\uD83D\uDC9D'},
+  {label:'Solo Work',    query:'quiet place to work from laptop',  icon:'\uD83D\uDCBB'},
+  {label:'Late Night',   query:'late night drinks open late',      icon:'\uD83C\uDF19'},
+  {label:'Group Dinner', query:'large group dinner',               icon:'\uD83D\uDC65'},
+  {label:'Romantic',     query:'romantic dinner intimate',         icon:'\uD83D\uDD6F\uFE0F'},
+  {label:'Hidden Gems',  query:'cozy quiet hidden gem',           icon:'\uD83D\uDC8E'},
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────────────────────
@@ -67,6 +67,22 @@ function distKm(lat1,lng1,lat2,lng2){
   const R=6371,dL=(lat2-lat1)*Math.PI/180,dG=(lng2-lng1)*Math.PI/180;
   const a=Math.sin(dL/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dG/2)**2;
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+/** Maps vibe/tag absence to honest caveats. Returns up to 3 items. */
+function getNotKnownFor(vibes, tags) {
+  const v = (vibes||[]).map(s=>s.toLowerCase()).join(' ');
+  const t = (tags||[]).map(s=>s.toLowerCase()).join(' ');
+  const nots = [];
+  if(!v.includes('lively')&&!t.includes('loud')&&!t.includes('bar')) nots.push('buzzy bar energy');
+  if(!v.includes('quiet')&&!v.includes('intimate')&&!t.includes('intimate')) nots.push('quiet one-on-one dining');
+  if(!v.includes('upscale')&&!t.includes('fine dining')&&!t.includes('tasting')) nots.push('fine dining formality');
+  if(!t.includes('patio')&&!t.includes('terrace')&&!t.includes('outdoor')) nots.push('outdoor seating');
+  if(!t.includes('late night')&&!v.includes('lively')) nots.push('late-night sittings');
+  if(!t.includes('group')&&!v.includes('lively')) nots.push('large group bookings');
+  if(!t.includes('cocktail')&&!t.includes('wine')&&!t.includes('bar')) nots.push('cocktail or wine-forward menu');
+  if(!t.includes('vegetarian')&&!t.includes('vegan')&&!t.includes('plant')) nots.push('vegetarian/vegan options');
+  return nots.slice(0,3);
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────────────────────────────
@@ -126,9 +142,9 @@ function VibePill({children}){
 }
 
 function VenueTypePill({r}){
-  if(r.lateNight&&r.isBar) return <span style={{fontSize:11,background:'#1e1b4b',color:'#c7d2fe',padding:'2px 8px',borderRadius:99,fontWeight:600}}>🌙 Late Night Bar</span>;
-  if(r.isBar)  return <span style={{fontSize:11,background:'#e8faf8',color:'#0B1F3A',padding:'2px 8px',borderRadius:99,fontWeight:600}}>🍺 Bar</span>;
-  if(r.isCafe) return <span style={{fontSize:11,background:'#f0fdf4',color:'#166534',padding:'2px 8px',borderRadius:99,fontWeight:600}}>☕ Cafe</span>;
+  if(r.lateNight&&r.isBar) return <span style={{fontSize:11,background:'#1e1b4b',color:'#c7d2fe',padding:'2px 8px',borderRadius:99,fontWeight:600}}>{'\uD83C\uDF19'} Late Night Bar</span>;
+  if(r.isBar)  return <span style={{fontSize:11,background:'#e8faf8',color:'#0B1F3A',padding:'2px 8px',borderRadius:99,fontWeight:600}}>{'\uD83C\uDF7A'} Bar</span>;
+  if(r.isCafe) return <span style={{fontSize:11,background:'#f0fdf4',color:'#166534',padding:'2px 8px',borderRadius:99,fontWeight:600}}>{'\u2615'} Cafe</span>;
   return null;
 }
 
@@ -136,8 +152,20 @@ function HoursLine({r}){
   if(!r.openTime||!r.closeTime) return null;
   return(
     <span style={{fontSize:12,color:r.isOpenAtTime?'#16a34a':'#ef4444',fontWeight:500,marginLeft:6}}>
-      {r.isOpenAtTime?'\uD83D\uDD50':'\u26D4'} {r.openTime}{' \u2013 '}{r.closeTime}
+      {r.isOpenAtTime?'\uD83D\uDD50':'\u26D4'} {r.openTime}{' - '}{r.closeTime}
     </span>
+  );
+}
+
+/** Single compact row in the expanded panel - always 1 line */
+function ExpandRow({icon,label,value}){
+  return(
+    <div style={{display:'flex',alignItems:'baseline',gap:8}}>
+      <span style={{fontSize:14,flexShrink:0,lineHeight:1}}>{icon}</span>
+      <p style={{margin:0,fontSize:13,color:'#374151',lineHeight:1.4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0}}>
+        <span style={{fontWeight:600,color:'#0B1F3A'}}>{label}: </span>{value}
+      </p>
+    </div>
   );
 }
 
@@ -147,11 +175,28 @@ function RestaurantCard({r,index,userLocation}){
     ? distKm(userLocation.lat,userLocation.lng,r.coordinates.lat,r.coordinates.lng).toFixed(1)
     : null;
   const mapsUrl=`https://www.google.com/maps/search/${encodeURIComponent(r.name+(r.address?' '+r.address:' Toronto'))}`;
-  const redditUrl=`https://www.reddit.com/r/toronto/search/?q=${encodeURIComponent(r.name)}&sort=top&t=year`;
-  const topVibes=(r.vibes||[]).slice(0,3);
-  const scoreColor=r.matchScore>=80?'#16a34a':r.matchScore>=60?'#2EC4B6':'#94a3b8';
-  const scoreBg   =r.matchScore>=80?'#f0fdf4':r.matchScore>=60?'#e8faf8':'#F7F9FC';
-  const topBarBg  =r.matchScore>=80
+
+  // ── Derived display values (all limits enforced here) ──
+  const topVibes    = (r.vibes||[]).slice(0,3);                                        // max 3
+  const bestFor     = (r.bestFor||[]).slice(0,2);                                      // max 2
+  const whyLine     = r.whyRecommended ? r.whyRecommended.split(/\.\s/)[0]+'.' : '';  // 1 sentence
+  const tipLine     = r.insiderTip ? r.insiderTip.split(/\.\s/)[0]+'.' : null;        // 1st sentence
+  const peakLine    = r.peakTimes&&r.peakTimes[0] ? r.peakTimes[0] : null;            // 1st item only
+  const knownLine   = r.tags&&r.tags.length ? r.tags.slice(0,3).join(', ') : null;
+  const notKnownLine= getNotKnownFor(topVibes,r.tags).slice(0,2).join(', ')||null;    // max 2 caveats
+
+  // Transit: prefer subway, fall back to streetcar
+  const subwayInfo    = r.transit?.subway?.[0];
+  const streetcarInfo = !subwayInfo&&r.transit?.streetcar?.[0];
+  const transitLine   = subwayInfo
+    ? `${subwayInfo.name} (${subwayInfo.line}) - ${subwayInfo.walkMinutes} min walk`
+    : streetcarInfo
+    ? `${streetcarInfo.route} - ${streetcarInfo.walkMinutes} min walk`
+    : null;
+
+  const scoreColor = r.matchScore>=80?'#16a34a':r.matchScore>=60?'#2EC4B6':'#94a3b8';
+  const scoreBg    = r.matchScore>=80?'#f0fdf4':r.matchScore>=60?'#e8faf8':'#F7F9FC';
+  const topBarBg   = r.matchScore>=80
     ?'linear-gradient(90deg,#16a34a,#4ade80)'
     :r.matchScore>=60
       ?'linear-gradient(90deg,#2EC4B6,#1aada3)'
@@ -162,97 +207,75 @@ function RestaurantCard({r,index,userLocation}){
       style={{background:'#fff',borderRadius:16,boxShadow:'0 1px 4px rgba(11,31,58,0.06),0 4px 16px rgba(11,31,58,0.06)',overflow:'hidden',transition:'box-shadow 0.2s,transform 0.2s',animationName:'fadeUp',animationDuration:'0.35s',animationTimingFunction:'ease',animationFillMode:'both',animationDelay:`${index*0.04}s`}}
       onMouseEnter={e=>{e.currentTarget.style.boxShadow='0 4px 8px rgba(11,31,58,0.08),0 12px 32px rgba(11,31,58,0.12)';e.currentTarget.style.transform='translateY(-2px)';}}
       onMouseLeave={e=>{e.currentTarget.style.boxShadow='0 1px 4px rgba(11,31,58,0.06),0 4px 16px rgba(11,31,58,0.06)';e.currentTarget.style.transform='translateY(0)';}}>
+
+      {/* Match-score colour stripe */}
       <div style={{height:4,background:topBarBg}}/>
-      <div style={{padding:'18px 20px 20px'}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10,marginBottom:6}}>
+
+      <div style={{padding:'16px 20px 18px'}}>
+
+        {/* VISIBLE: Name + Match % */}
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10,marginBottom:4}}>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{display:'flex',alignItems:'center',gap:7,flexWrap:'wrap',marginBottom:3}}>
+            <div style={{display:'flex',alignItems:'center',gap:7,flexWrap:'wrap',marginBottom:2}}>
               <h3 style={{margin:0,fontSize:17,fontWeight:700,color:'#0B1F3A',lineHeight:1.2,fontFamily:'Georgia,serif'}}>{r.name}</h3>
               <VenueTypePill r={r}/>
             </div>
             <p style={{margin:0,fontSize:12,color:'#64748b',display:'flex',alignItems:'center',flexWrap:'wrap',gap:4}}>
               {r.neighbourhood} &middot; {r.cuisine} &middot; {PRICE_SYMBOLS[r.priceLevel]}
-              {dist&&<span style={{color:'#94a3b8'}}>&middot; {dist} km</span>}
+              {dist&&<span>&middot; {dist} km</span>}
+              &middot; <StarRating rating={r.rating}/>
               <HoursLine r={r}/>
             </p>
           </div>
-          <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:6}}>
-            <div style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700,color:scoreColor,background:scoreBg,border:`1px solid ${scoreColor}30`,borderRadius:8,padding:'4px 10px'}}>
-              {r.matchScore>=80?'\u2605':r.matchScore>=60?'\u2713':'\u00b7'} {r.matchScore}%
-            </div>
-            <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:'#94a3b8',textDecoration:'none',display:'flex',alignItems:'center',gap:3}} title="Open in Google Maps">
-              \uD83D\uDCCD Map
-            </a>
+          <div style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:12,fontWeight:700,color:scoreColor,background:scoreBg,border:`1px solid ${scoreColor}30`,borderRadius:8,padding:'4px 10px',flexShrink:0}}>
+            {r.matchScore>=80?'\u2605':r.matchScore>=60?'\u2713':'\u00b7'} {r.matchScore}%
           </div>
         </div>
-        <div style={{marginBottom:10}}>
-          <StarRating rating={r.rating}/>
-          {r.reviewCount>0&&<span style={{fontSize:12,color:'#94a3b8',marginLeft:6}}>({r.reviewCount.toLocaleString()})</span>}
-        </div>
+
+        {/* VISIBLE: Vibe tags (max 3) */}
         {topVibes.length>0&&(
-          <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>
+          <div style={{display:'flex',flexWrap:'wrap',gap:5,marginTop:10,marginBottom:7}}>
             {topVibes.map(v=><VibePill key={v}>{v}</VibePill>)}
           </div>
         )}
-        <div style={{background:'#F7F9FC',border:'1px solid #e2eaf4',borderRadius:8,padding:'8px 12px',marginBottom:10}}>
-          <p style={{margin:0,fontSize:13,color:'#374151',lineHeight:1.5}}>
-            <span style={{fontWeight:600,color:'#0B1F3A'}}>Why: </span>{r.whyRecommended}
-          </p>
-        </div>
-        <div style={{marginBottom:12}}>
-          <p style={{margin:'0 0 5px',fontSize:11,fontWeight:600,color:'#94a3b8',letterSpacing:'0.05em',textTransform:'uppercase'}}>Current Busyness</p>
-          <BusynessBar busyness={r.busyness}/>
-        </div>
-        {r.bestFor&&r.bestFor.length>0&&(
-          <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:12}}>
-            {r.bestFor.map(t=><Tag key={t} accent>{t}</Tag>)}
+
+        {/* VISIBLE: Best For tags (max 2) */}
+        {bestFor.length>0&&(
+          <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>
+            {bestFor.map(b=><Tag key={b} accent>{b}</Tag>)}
           </div>
         )}
-        <button onClick={()=>setExpanded(x=>!x)} style={{background:'none',border:'none',padding:0,cursor:'pointer',fontSize:13,color:'#2EC4B6',fontWeight:600}}>
+
+        {/* VISIBLE: Why (1 sentence) */}
+        {whyLine&&(
+          <p style={{margin:'0 0 12px',fontSize:13,color:'#64748b',lineHeight:1.5,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>
+            {whyLine}
+          </p>
+        )}
+
+        {/* Expand toggle */}
+        <button
+          onClick={()=>setExpanded(x=>!x)}
+          style={{background:'none',border:'none',padding:0,cursor:'pointer',fontSize:12,color:'#94a3b8',fontWeight:600,display:'flex',alignItems:'center',gap:4,transition:'color 0.15s'}}
+          onMouseEnter={e=>e.currentTarget.style.color='#2EC4B6'}
+          onMouseLeave={e=>e.currentTarget.style.color='#94a3b8'}>
           {expanded?'\u25b2 Less':'\u25bc More details'}
         </button>
+
+        {/* EXPANDED: up to 5 compact rows, each 1 line max */}
         {expanded&&(
-          <div style={{marginTop:12,display:'flex',flexDirection:'column',gap:10}}>
-            <div style={{background:'linear-gradient(135deg,#e8faf8,#d0f4f1)',border:'1px solid #9de0db',borderRadius:8,padding:'10px 12px'}}>
-              <p style={{margin:'0 0 3px',fontSize:11,fontWeight:700,color:'#2EC4B6',textTransform:'uppercase',letterSpacing:'0.05em'}}>Insider Tip</p>
-              <p style={{margin:0,fontSize:13,color:'#374151',lineHeight:1.5}}>{r.insiderTip}</p>
-            </div>
-            {r.transit&&(r.transit.subway.length>0||r.transit.streetcar.length>0)&&(
-              <div>
-                <p style={{margin:'0 0 6px',fontSize:11,fontWeight:600,color:'#94a3b8',letterSpacing:'0.05em',textTransform:'uppercase'}}>Nearest Transit</p>
-                {r.transit.subway.slice(0,1).map(s=>(
-                  <div key={s.name} style={{display:'flex',alignItems:'center',gap:8,fontSize:13,color:'#374151'}}>
-                    <span>\uD83D\uDE87</span><span><strong>{s.name}</strong> &middot; {s.line}</span>
-                    <span style={{marginLeft:'auto',color:'#94a3b8',fontSize:12}}>{s.walkMinutes} min walk</span>
-                  </div>
-                ))}
-                {r.transit.streetcar.map(s=>(
-                  <div key={s.route} style={{display:'flex',alignItems:'center',gap:8,fontSize:13,color:'#374151',marginTop:4}}>
-                    <span>\uD83D\uDE8B</span><span><strong>{s.route}</strong></span>
-                    <span style={{marginLeft:'auto',color:'#94a3b8',fontSize:12}}>{s.walkMinutes} min walk</span>
-                  </div>
-                ))}
-              </div>
+          <div style={{marginTop:12,paddingTop:12,borderTop:'1px solid #e2eaf4',display:'flex',flexDirection:'column',gap:8,animation:'fadeUp 0.18s ease'}}>
+            {tipLine      && <ExpandRow icon="\uD83D\uDCA1" label="Insider tip"   value={tipLine}/>}
+            {peakLine     && <ExpandRow icon="\u23F0"       label="Peak times"    value={peakLine}/>}
+            {transitLine  && <ExpandRow icon="\uD83D\uDE87" label="Transit"       value={transitLine}/>}
+            {knownLine    && <ExpandRow icon="\u2B50"       label="Known for"     value={knownLine}/>}
+            {notKnownLine && <ExpandRow icon="\uD83D\uDEAB" label="Not known for" value={notKnownLine}/>}
+            {r.address&&(
+              <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                style={{fontSize:12,color:'#94a3b8',textDecoration:'none',display:'flex',alignItems:'center',gap:4,marginTop:2}}>
+                {'\uD83D\uDCCD'} {r.address}
+              </a>
             )}
-            {r.peakTimes&&r.peakTimes.length>0&&(
-              <div>
-                <p style={{margin:'0 0 5px',fontSize:11,fontWeight:600,color:'#94a3b8',letterSpacing:'0.05em',textTransform:'uppercase'}}>Peak Times</p>
-                <div style={{display:'flex',flexWrap:'wrap',gap:5}}>{r.peakTimes.map(t=><Tag key={t}>{t}</Tag>)}</div>
-              </div>
-            )}
-            {r.tags&&r.tags.length>0&&(
-              <div>
-                <p style={{margin:'0 0 5px',fontSize:11,fontWeight:600,color:'#94a3b8',letterSpacing:'0.05em',textTransform:'uppercase'}}>Known For</p>
-                <div style={{display:'flex',flexWrap:'wrap',gap:5}}>{r.tags.map(t=><Tag key={t}>{t}</Tag>)}</div>
-              </div>
-            )}
-            {r.googleReviews&&r.googleReviews[0]&&(
-              <p style={{margin:0,fontSize:13,color:'#64748b',fontStyle:'italic',lineHeight:1.5}}>&ldquo;{r.googleReviews[0]}&rdquo;</p>
-            )}
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
-              {r.address&&<p style={{margin:0,fontSize:12,color:'#94a3b8'}}>{String.fromCharCode(128205)} {r.address}</p>}
-              <a href={redditUrl} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:'#2EC4B6',fontWeight:600,textDecoration:'none'}}>{String.fromCharCode(128488)} Reddit</a>
-            </div>
           </div>
         )}
       </div>
@@ -368,7 +391,7 @@ export default function Home(){
         setDetectedIntent(data.detectedIntent||null);
         if(data.meta?.total)setTotalVenues(data.meta.total);
       }
-    }catch{setError('Network error \u2014 please try again.');}
+    }catch{setError('Network error - please try again.');}
     finally{setLoading(false);}
   }
 
@@ -403,7 +426,7 @@ export default function Home(){
   return(
     <>
       <Head>
-        <title>Toronto Table &mdash; Find Your Perfect Spot</title>
+        <title>Toronto Table - Find Your Perfect Spot</title>
         <meta name="description" content="Discover Toronto restaurants, bars and cafes by vibe, occasion, and intent beyond ratings."/>
         <meta name="viewport" content="width=device-width,initial-scale=1"/>
         <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -441,7 +464,7 @@ export default function Home(){
                 style={{background:'#fff',border:'none',borderRight:'1px solid #e2eaf4',padding:'0 16px',cursor:'pointer',color:'#2EC4B6',fontSize:13,fontWeight:600,whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:5,transition:'background 0.15s',minWidth:100}}
                 onMouseEnter={e=>e.currentTarget.style.background='#e8faf8'}
                 onMouseLeave={e=>e.currentTarget.style.background='#fff'}>
-                \uD83D\uDCCD {locating?'Locating\u2026':'Near Me'}
+                {'\uD83D\uDCCD'} {locating?'Locating...':'Near Me'}
               </button>
               <input
                 ref={intentRef}
@@ -449,14 +472,14 @@ export default function Home(){
                 value={intentQuery}
                 onChange={e=>setIntentQuery(e.target.value)}
                 onKeyDown={e=>{if(e.key==='Enter')search(false);}}
-                placeholder="Type a vibe, occasion, or cuisine\u2026"
+                placeholder="Try a vibe, occasion, or cuisine..."
                 style={{flex:1,border:'none',outline:'none',padding:'16px 16px',fontSize:15,color:'#0B1F3A',fontFamily:"'Inter',sans-serif",minWidth:0}}
               />
               <button onClick={()=>search(false)} disabled={loading}
                 style={{background:loading?'#dde4ef':'#2EC4B6',border:'none',padding:'0 24px',cursor:loading?'not-allowed':'pointer',color:'#fff',fontWeight:700,fontSize:15,transition:'background 0.15s',whiteSpace:'nowrap'}}
                 onMouseEnter={e=>{if(!loading)e.currentTarget.style.background='#1aada3';}}
                 onMouseLeave={e=>{if(!loading)e.currentTarget.style.background='#2EC4B6';}}>
-                {loading?'Searching\u2026':'Search'}
+                {loading?'Searching...':'Search'}
               </button>
             </div>
             <div style={{display:'flex',justifyContent:'center',flexWrap:'wrap',gap:8,marginTop:16}}>
@@ -485,8 +508,8 @@ export default function Home(){
               </div>
               <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(230px,1fr))',gap:20,marginBottom:40}}>
                 {[
-                  {step:'01',icon:'\uD83D\uDD0D',title:'Discover',desc:'We pull real, open-source data from across Toronto \u2014 no paid placements, no sponsored results. What you see is earned, not bought.'},
-                  {step:'02',icon:'\u2728',title:'Analyze',desc:'Our vibe engine reads between the lines \u2014 figuring out if a spot is great for a quiet first date, a loud birthday, or a solo work session.'},
+                  {step:'01',icon:'\uD83D\uDD0D',title:'Discover',desc:'We pull real, open-source data from across Toronto - no paid placements, no sponsored results. What you see is earned, not bought.'},
+                  {step:'02',icon:'\u2728',title:'Analyze',desc:'Our vibe engine reads between the lines - figuring out if a spot is great for a quiet first date, a loud birthday, or a solo work session.'},
                   {step:'03',icon:'\uD83C\uDFAF',title:'Match',desc:'Tell us the mood. We will surface the perfect spot based on your vibe, occasion, and where you are right now.'},
                 ].map((s)=>(
                   <div key={s.step}
@@ -639,7 +662,7 @@ export default function Home(){
               </div>
               {!noOccasion&&strongMatchCount===0&&!filtersActive&&(
                 <div style={{background:'#fff',borderRadius:12,padding:'14px 18px',marginBottom:14,border:'1px solid #e2eaf4',fontSize:14,color:'#64748b'}}>
-                  No perfect matches found \u2014 showing nearby suggestions below.
+                  No perfect matches found - showing nearby suggestions below.
                 </div>
               )}
               <div className="cards-grid">
